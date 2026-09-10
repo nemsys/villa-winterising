@@ -1,0 +1,6 @@
+# Сайтът е само index.html. Всичко останало в repo-то е работен материал и
+# не бива да се сервира от Pages.
+exclude:
+  - CLAUDE.md
+  - tests
+  - _config.yml
