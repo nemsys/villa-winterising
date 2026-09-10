@@ -454,6 +454,14 @@
     return o;
   }
 
+  // добавена в редактора, за разлика от редакция върху задача от BASE.
+  // home се пише само от редактора при добавяне, затова върши работа
+  // и за записи отпреди въвеждането на added.
+  function isAdded(n) {
+    var e = edits[n];
+    return !!(e && (e.added || e.home));
+  }
+
   function resolve() {
     byN = {};
     Object.keys(BASEN).forEach(function (n) {
@@ -462,8 +470,21 @@
     });
     Object.keys(edits).forEach(function (n) {
       if (edits[n] === null || BASEN[n]) { return; }
+      // редакция на задача, която вече я няма в BASE, не я възкресява
+      if (!isAdded(n)) { return; }
       byN[n] = merged({ n: n, t: "", m: 0 }, edits[n]);
     });
+  }
+
+  // изчиства редакции, останали без задача след промяна в BASE
+  function prune() {
+    var drop = [];
+    Object.keys(edits).forEach(function (n) {
+      if (BASEN[n] || isAdded(n)) { return; }
+      drop.push(n);
+    });
+    drop.forEach(function (n) { delete edits[n]; });
+    return drop.length > 0;
   }
   resolve();
 
@@ -733,14 +754,15 @@
     var n = edCtx.n;
     if (!n) {
       n = "нова-" + Date.now().toString(36);
+      rec.added = true;
       rec.home = [edCtx.day, edCtx.pi];
       edits[n] = rec;
       resolve();
       layout[edCtx.day][edCtx.pi].push(n);
     } else {
       var old = edits[n];
-      if (old && old.home) { rec.home = old.home; }
-      else if (!BASEN[n]) { rec.home = [edCtx.day, edCtx.pi]; }
+      if (old && (old.added || old.home)) { rec.added = true; rec.home = old.home || [edCtx.day, edCtx.pi]; }
+      else if (!BASEN[n]) { rec.added = true; rec.home = [edCtx.day, edCtx.pi]; }
       edits[n] = rec;
       resolve();
     }
@@ -850,6 +872,7 @@
       try { if (rawItems) { edits = JSON.parse(rawItems) || {}; } }
       catch (e) { edits = {}; }
       resolve();
+      if (prune()) { resolve(); saveItems(); }
       try { if (rawState) { state = migrate(JSON.parse(rawState) || {}); } }
       catch (e) { state = {}; }
       try { layout = normalize(rawLayout ? JSON.parse(rawLayout) : null); }
