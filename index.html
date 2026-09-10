@@ -135,12 +135,74 @@
     background: none; border: 1px solid var(--line); border-radius: 8px;
     color: var(--steel); font-size: 13px; font-family: inherit; cursor: pointer;
   }
+  .editbtn {
+    position: absolute; top: 12px; right: 14px;
+    background: rgba(255,255,255,.16); color: #fff; border: 0;
+    border-radius: 999px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
+  .editbtn.on { background: #7fd6ae; color: var(--ink); }
+
+  .editbar {
+    display: flex; gap: 8px; padding: 10px 12px;
+    background: #fff8e6; border-bottom: 1px solid #e8dcc0;
+    font-size: 13px; align-items: center; flex-wrap: wrap;
+  }
+  .editbar .hint { flex: 1; min-width: 140px; color: #6b5b32; line-height: 1.35; }
+  .editbar button {
+    padding: 7px 12px; border: 1px solid #d8c89c; border-radius: 8px;
+    background: #fff; color: #6b5b32; font-size: 13px; font-family: inherit; cursor: pointer;
+  }
+
+  .rowctl { display: none; flex: 0 0 auto; gap: 4px; align-self: center; }
+  .editing .rowctl { display: flex; }
+  .rowctl button {
+    width: 32px; height: 32px; padding: 0; line-height: 1;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: #fff; color: var(--pine);
+    font-size: 15px; font-family: inherit; cursor: pointer;
+  }
+  .editing .row { cursor: default; }
+  .editing .box { opacity: .2; }
+  .empty { padding: 14px 12px; font-size: 13px; color: var(--steel); font-style: italic; }
+
+  .sheet {
+    position: fixed; inset: 0; z-index: 40;
+    background: rgba(20,32,29,.45);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheetbox {
+    background: var(--card); width: 100%; max-width: 560px;
+    max-height: 82vh; overflow-y: auto;
+    border-radius: 14px 14px 0 0; padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+  }
+  .sheetbox h3 { margin: 0 0 2px; font-size: 16px; }
+  .sheetbox .what { margin: 0 0 12px; font-size: 13px; color: var(--steel); line-height: 1.35; }
+  .opt {
+    display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+    padding: 12px; margin-bottom: 6px; font-family: inherit; cursor: pointer;
+    background: #f4f7f6; border: 1px solid var(--line); border-radius: 10px;
+  }
+  .opt b { font-size: 14px; }
+  .opt span { font-size: 13px; color: var(--steel); }
+  .opt.cur { opacity: .5; }
+  .sheetbox textarea {
+    width: 100%; height: 210px; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11px; line-height: 1.4; padding: 10px;
+    border: 1px solid var(--line); border-radius: 8px; background: #f4f7f6; color: var(--ink);
+  }
+  .sheetbox .close {
+    display: block; width: 100%; margin-top: 8px; padding: 12px;
+    background: none; border: 1px solid var(--line); border-radius: 10px;
+    color: var(--steel); font-size: 14px; font-family: inherit; cursor: pointer;
+  }
   .hide { display: none; }
   @media (prefers-reduced-motion: reduce) { #app * { transition: none !important; } }
 </style>
 
 <div class="top">
   <h1>Зазимяване на вилата</h1>
+  <button class="editbtn" id="editbtn" type="button">Подредба</button>
   <div class="sub">Пирин · петък–събота</div>
   <div class="clock">
     <span class="lbl" id="leftpre">остава</span>
@@ -155,6 +217,12 @@
     <button role="tab" data-day="sat" aria-selected="false">Събота</button>
     <button role="tab" data-day="chk" aria-selected="false">Проверка</button>
   </div>
+</div>
+
+<div class="editbar hide" id="editbar">
+  <span class="hint">Стрелките местят реда в неговата фаза. <b>→</b> го праща в друг ден или фаза.</span>
+  <button type="button" id="exportbtn">Изнеси наредбата</button>
+  <button type="button" id="revertbtn">Върни изходната</button>
 </div>
 
 <div id="thu"></div>
@@ -197,9 +265,28 @@
 
 <button class="reset" id="reset">Изчисти всички отметки</button>
 
+<div class="sheet hide" id="sheet">
+  <div class="sheetbox">
+    <h3>Премести в</h3>
+    <p class="what" id="sheetwhat"></p>
+    <div id="sheetlist"></div>
+    <button type="button" class="close" data-close>Отказ</button>
+  </div>
+</div>
+
+<div class="sheet hide" id="expsheet">
+  <div class="sheetbox">
+    <h3>Наредбата</h3>
+    <p class="what">Копирай това и ми го прати, за да стане новата изходна наредба в repo-то.</p>
+    <textarea id="exptext" readonly></textarea>
+    <button type="button" class="close" id="copybtn">Копирай</button>
+    <button type="button" class="close" data-close>Затвори</button>
+  </div>
+</div>
+
 <script>
 (function () {
-  var DATA = {
+  var BASE = {
     thu: [
       { title: "Подготовка", time: "≈2 ч 20 мин", items: [
         { n: "Ч1", t: "Измий туристическите обувки", m: 20, note: "Днес, за да имат два дни да изсъхнат" },
@@ -285,17 +372,129 @@
   var app = document.getElementById("app");
   var state = {};
   var KEY = "zazimyavane-2026";
+  var LKEY = "zazimyavane-layout-2026";
 
-  function id(day, pi, ii) { return day + "-" + pi + "-" + ii; }
-
+  var DAYS = ["thu", "fri", "sat"];
   var DAYNAME = { thu: "Четвъртък", fri: "Петък", sat: "Събота" };
+
+  // n е уникален и не се мени при разместване — по него се пазят отметките
+  var byN = {};
+  var PHASES = {};
+  DAYS.forEach(function (day) {
+    PHASES[day] = BASE[day].map(function (ph) {
+      ph.items.forEach(function (it) { byN[String(it.n)] = it; });
+      return { title: ph.title, water: !!ph.water };
+    });
+  });
+
+  function baseLayout() {
+    var l = {};
+    DAYS.forEach(function (day) {
+      l[day] = BASE[day].map(function (ph) {
+        return ph.items.map(function (it) { return String(it.n); });
+      });
+    });
+    return l;
+  }
+
+  // маха непознати и повторени номера, връща липсващите на изходното им място
+  function normalize(l) {
+    var base = baseLayout(), seen = {}, out = {};
+    DAYS.forEach(function (day) {
+      var src = (l && l[day]) || [];
+      out[day] = base[day].map(function (_, pi) {
+        return (src[pi] || []).filter(function (n) {
+          if (!byN[n] || seen[n]) return false;
+          seen[n] = true;
+          return true;
+        });
+      });
+    });
+    DAYS.forEach(function (day) {
+      base[day].forEach(function (ns, pi) {
+        ns.forEach(function (n) {
+          if (!seen[n]) { seen[n] = true; out[day][pi].push(n); }
+        });
+      });
+    });
+    return out;
+  }
+
+  var layout = baseLayout();
+  var editing = false;
+
+  function dur(mins) {
+    var h = Math.floor(mins / 60), m = mins % 60;
+    if (h && m) return h + " ч " + m + " мин";
+    if (h) return h + " ч";
+    return m + " мин";
+  }
+
+  function fmt(mins) {
+    if (mins <= 0) return "Всичко е отметнато";
+    return dur(mins);
+  }
+
+  function phaseTime(ns) {
+    var w = 0, q = 0;
+    ns.forEach(function (n) {
+      var it = byN[n];
+      if (!it) return;
+      if (it.wait) { q += it.m || 0; } else { w += it.m || 0; }
+    });
+    if (!w && !q) return "празно";
+    if (q) return "≈" + dur(w) + " работа + " + dur(q) + " източване";
+    return "≈" + dur(w);
+  }
+
+  function rowEl(day, pi, ii, n) {
+    var it = byN[n];
+    var r = document.createElement("div");
+    r.className = "row" + (it.wait ? " wait" : "") + (it.key ? " key" : "");
+    r.setAttribute("role", "checkbox");
+    r.setAttribute("aria-checked", "false");
+    r.tabIndex = 0;
+    r.dataset.key = n;
+    r.dataset.min = it.m;
+    r.dataset.wait = it.wait ? "1" : "";
+    r.innerHTML =
+      '<span class="box"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8.5l4 4L14 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+      '<span class="txt"><span class="t"></span></span>' +
+      '<span class="min"></span>' +
+      '<span class="rowctl">' +
+        '<button type="button" data-act="up" aria-label="Нагоре">↑</button>' +
+        '<button type="button" data-act="down" aria-label="Надолу">↓</button>' +
+        '<button type="button" data-act="move" aria-label="Премести другаде">→</button>' +
+      '</span>';
+    r.querySelector(".t").textContent = it.t;
+    if (it.note) {
+      var nt = document.createElement("span");
+      nt.className = "n";
+      nt.textContent = it.note;
+      r.querySelector(".txt").appendChild(nt);
+    }
+    r.querySelector(".min").textContent = it.m ? it.m + "′" : "";
+
+    r.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("[data-act]") : null;
+      if (b) { e.stopPropagation(); act(b.dataset.act, day, pi, n); return; }
+      if (!editing) { toggle(n); }
+    });
+    r.addEventListener("keydown", function (e) {
+      if (editing) return;
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(n); }
+    });
+    return r;
+  }
 
   function build(day) {
     var wrap = document.getElementById(day);
     wrap.innerHTML = "";
     var work = 0, wait = 0;
-    DATA[day].forEach(function (ph) {
-      ph.items.forEach(function (it) {
+    layout[day].forEach(function (ns) {
+      ns.forEach(function (n) {
+        var it = byN[n];
+        if (!it) return;
         if (it.wait) { wait += it.m || 0; } else { work += it.m || 0; }
       });
     });
@@ -304,72 +503,113 @@
     dh.innerHTML = "<h2></h2><div class='tot'></div>";
     dh.querySelector("h2").textContent = DAYNAME[day];
     dh.querySelector(".tot").textContent =
-      "общо " + fmt(work) + " работа" + (wait ? " + " + fmt(wait) + " източване" : "");
+      "общо " + dur(work) + " работа" + (wait ? " + " + dur(wait) + " източване" : "");
     wrap.appendChild(dh);
-    DATA[day].forEach(function (ph, pi) {
+
+    PHASES[day].forEach(function (ph, pi) {
+      var ns = layout[day][pi];
       var sec = document.createElement("section");
       sec.className = "phase" + (ph.water ? " water" : "");
-      if (DATA[day].length > 1) {
+      if (PHASES[day].length > 1) {
         var h = document.createElement("header");
         h.innerHTML = "<b></b><span></span>";
         h.querySelector("b").textContent = ph.title;
-        h.querySelector("span").textContent = ph.time;
+        h.querySelector("span").textContent = phaseTime(ns);
         sec.appendChild(h);
       } else {
         sec.style.marginTop = "12px";
       }
       var rows = document.createElement("div");
       rows.className = "rows";
-      ph.items.forEach(function (it, ii) {
-        var key = id(day, pi, ii);
-        var b = document.createElement("button");
-        b.className = "row" + (it.wait ? " wait" : "") + (it.key ? " key" : "");
-        b.setAttribute("role", "checkbox");
-        b.setAttribute("aria-checked", "false");
-        b.dataset.key = key;
-        b.dataset.min = it.m;
-        b.dataset.wait = it.wait ? "1" : "";
-        b.innerHTML =
-          '<span class="box"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8.5l4 4L14 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
-          '<span class="txt"><span class="t"></span></span>' +
-          '<span class="min"></span>';
-        b.querySelector(".t").textContent = it.t;
-        if (it.note) {
-          var n = document.createElement("span");
-          n.className = "n";
-          n.textContent = it.note;
-          b.querySelector(".txt").appendChild(n);
-        }
-        b.querySelector(".min").textContent = it.m ? it.m + "′" : "";
-        b.addEventListener("click", function () { toggle(key); });
-        rows.appendChild(b);
-      });
+      if (!ns.length) {
+        var e = document.createElement("div");
+        e.className = "empty";
+        e.textContent = "празно";
+        rows.appendChild(e);
+      }
+      ns.forEach(function (n, ii) { rows.appendChild(rowEl(day, pi, ii, n)); });
       sec.appendChild(rows);
       wrap.appendChild(sec);
     });
   }
 
-  function fmt(mins) {
-    if (mins <= 0) return "Всичко е отметнато";
-    var h = Math.floor(mins / 60), m = mins % 60;
-    if (h && m) return h + " ч " + m + " мин";
-    if (h) return h + " ч";
-    return m + " мин";
+  function rebuild() {
+    DAYS.forEach(build);
+    refresh();
+  }
+
+  function showDay(day) {
+    document.querySelectorAll(".tabs button").forEach(function (t) {
+      t.setAttribute("aria-selected", t.dataset.day === day ? "true" : "false");
+    });
+    ["thu", "fri", "sat", "chk"].forEach(function (d) {
+      document.getElementById(d).classList.toggle("hide", d !== day);
+    });
+  }
+
+  function act(a, day, pi, n) {
+    var arr = layout[day][pi];
+    var ii = arr.indexOf(n);
+    if (ii < 0) return;
+    if (a === "move") { openSheet(day, pi, n); return; }
+    if (a === "up" && ii > 0) { arr.splice(ii, 1); arr.splice(ii - 1, 0, n); }
+    else if (a === "down" && ii < arr.length - 1) { arr.splice(ii, 1); arr.splice(ii + 1, 0, n); }
+    else { return; }
+    saveLayout();
+    rebuild();
+  }
+
+  function moveTo(fd, fp, n, td, tp) {
+    var from = layout[fd][fp];
+    var i = from.indexOf(n);
+    if (i < 0) return;
+    from.splice(i, 1);
+    layout[td][tp].push(n);
+    saveLayout();
+    rebuild();
+    showDay(td);
+  }
+
+  function openSheet(fromDay, fromPi, n) {
+    var list = document.getElementById("sheetlist");
+    list.innerHTML = "";
+    document.getElementById("sheetwhat").textContent = byN[n].t;
+    DAYS.forEach(function (day) {
+      PHASES[day].forEach(function (ph, pi) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "opt" + (day === fromDay && pi === fromPi ? " cur" : "");
+        b.innerHTML = "<b></b><span></span>";
+        b.querySelector("b").textContent = DAYNAME[day];
+        b.querySelector("span").textContent =
+          PHASES[day].length > 1 ? ph.title : "целият ден";
+        b.addEventListener("click", function () {
+          moveTo(fromDay, fromPi, n, day, pi);
+          closeSheets();
+        });
+        list.appendChild(b);
+      });
+    });
+    document.getElementById("sheet").classList.remove("hide");
+  }
+
+  function closeSheets() {
+    document.getElementById("sheet").classList.add("hide");
+    document.getElementById("expsheet").classList.add("hide");
   }
 
   function refresh() {
     var rows = app.querySelectorAll(".row");
-    var totalWork = 0, leftWork = 0, leftWait = 0, done = 0, all = 0;
+    var totalWork = 0, leftWork = 0, leftWait = 0;
     rows.forEach(function (r) {
       var on = state[r.dataset.key] === true;
       r.setAttribute("aria-checked", on ? "true" : "false");
       var m = parseInt(r.dataset.min, 10) || 0;
       if (r.dataset.wait) { if (!on) leftWait += m; }
       else { totalWork += m; if (!on) leftWork += m; }
-      all++; if (on) done++;
     });
     document.getElementById("wsum").textContent =
-      leftWait > 0 ? "+ " + fmt(leftWait) + " източване" : "";
+      leftWait > 0 ? "+ " + dur(leftWait) + " източване" : "";
     document.getElementById("left").textContent = fmt(leftWork);
     document.getElementById("leftpre").style.display = leftWork <= 0 ? "none" : "";
     document.getElementById("leftlbl").textContent = leftWork <= 0 ? "" : "работа";
@@ -377,50 +617,105 @@
       (totalWork ? Math.round((1 - leftWork / totalWork) * 100) : 0) + "%";
   }
 
-  function toggle(key) {
-    state[key] = !state[key];
+  function toggle(n) {
+    state[n] = !state[n];
     refresh();
     save();
   }
 
-  function save() {
+  function put(k, v) {
     try {
-      if (window.storage && window.storage.set) {
-        window.storage.set(KEY, JSON.stringify(state), false);
-      } else if (window.localStorage) {
-        window.localStorage.setItem(KEY, JSON.stringify(state));
-      }
-    } catch (e) { /* отметките остават само за тази сесия */ }
+      if (window.storage && window.storage.set) { window.storage.set(k, v, false); }
+      else if (window.localStorage) { window.localStorage.setItem(k, v); }
+    } catch (e) { /* остава само за тази сесия */ }
+  }
+
+  function getLocal(k) {
+    try { return (window.localStorage && window.localStorage.getItem(k)) || null; }
+    catch (e) { return null; }
+  }
+
+  function save() { put(KEY, JSON.stringify(state)); }
+  function saveLayout() { put(LKEY, JSON.stringify(layout)); }
+
+  // старите отметки бяха по позиция (thu-0-3); превежда ги към номер на задача
+  function migrate(old) {
+    var base = baseLayout(), out = {};
+    Object.keys(old || {}).forEach(function (k) {
+      if (old[k] !== true) return;
+      var m = /^(thu|fri|sat)-(\d+)-(\d+)$/.exec(k);
+      if (!m) { out[k] = true; return; }
+      var arr = base[m[1]] && base[m[1]][+m[2]];
+      var n = arr && arr[+m[3]];
+      if (n) { out[n] = true; }
+    });
+    return out;
   }
 
   function load() {
-    if (!(window.storage && window.storage.get)) {
-      try {
-        var raw = window.localStorage && window.localStorage.getItem(KEY);
-        if (raw) { state = JSON.parse(raw) || {}; }
-      } catch (e) { state = {}; }
-      refresh();
+    function apply(rawState, rawLayout) {
+      try { if (rawState) { state = migrate(JSON.parse(rawState) || {}); } }
+      catch (e) { state = {}; }
+      try { if (rawLayout) { layout = normalize(JSON.parse(rawLayout)); } }
+      catch (e) { layout = baseLayout(); }
+      rebuild();
+    }
+    if (window.storage && window.storage.get) {
+      Promise.resolve()
+        .then(function () {
+          return Promise.all([window.storage.get(KEY, false), window.storage.get(LKEY, false)]);
+        })
+        .then(function (r) {
+          apply(r[0] && r[0].value, r[1] && r[1].value);
+        })
+        .catch(function () { apply(null, null); });
       return;
     }
-    Promise.resolve()
-      .then(function () { return window.storage.get(KEY, false); })
-      .then(function (res) {
-        if (res && res.value) { state = JSON.parse(res.value) || {}; }
-      })
-      .catch(function () { state = {}; })
-      .then(function () { refresh(); });
+    apply(getLocal(KEY), getLocal(LKEY));
   }
 
   document.querySelectorAll(".tabs button").forEach(function (t) {
     t.addEventListener("click", function () {
-      document.querySelectorAll(".tabs button").forEach(function (o) {
-        o.setAttribute("aria-selected", o === t ? "true" : "false");
-      });
-      ["thu", "fri", "sat", "chk"].forEach(function (d) {
-        document.getElementById(d).classList.toggle("hide", d !== t.dataset.day);
-      });
+      showDay(t.dataset.day);
       window.scrollTo(0, 0);
     });
+  });
+
+  document.getElementById("editbtn").addEventListener("click", function () {
+    editing = !editing;
+    app.classList.toggle("editing", editing);
+    this.classList.toggle("on", editing);
+    this.textContent = editing ? "Готово" : "Подредба";
+    document.getElementById("editbar").classList.toggle("hide", !editing);
+  });
+
+  document.getElementById("exportbtn").addEventListener("click", function () {
+    document.getElementById("exptext").value = JSON.stringify(layout, null, 2);
+    document.getElementById("expsheet").classList.remove("hide");
+  });
+
+  document.getElementById("copybtn").addEventListener("click", function () {
+    var ta = document.getElementById("exptext");
+    ta.select();
+    var done = false;
+    try { done = document.execCommand("copy"); } catch (e) { done = false; }
+    if (!done && navigator.clipboard) { navigator.clipboard.writeText(ta.value).catch(function () {}); }
+    this.textContent = "Копирано";
+    var b = this;
+    setTimeout(function () { b.textContent = "Копирай"; }, 1500);
+  });
+
+  document.getElementById("revertbtn").addEventListener("click", function () {
+    layout = baseLayout();
+    saveLayout();
+    rebuild();
+  });
+
+  document.querySelectorAll("[data-close]").forEach(function (b) {
+    b.addEventListener("click", closeSheets);
+  });
+  document.querySelectorAll(".sheet").forEach(function (sh) {
+    sh.addEventListener("click", function (e) { if (e.target === sh) { closeSheets(); } });
   });
 
   document.getElementById("reset").addEventListener("click", function () {
@@ -429,9 +724,6 @@
     save();
   });
 
-  build("thu");
-  build("fri");
-  build("sat");
   load();
 })();
 </script>
