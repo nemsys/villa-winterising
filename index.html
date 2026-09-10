@@ -170,6 +170,36 @@
   .editing .box { opacity: .2; }
   .empty { padding: 14px 12px; font-size: 13px; color: var(--steel); font-style: italic; }
 
+  .addbtn {
+    display: none; width: calc(100% - 24px); margin: 8px 12px 0; padding: 11px;
+    background: none; border: 1px dashed var(--line); border-radius: 8px;
+    color: var(--pine); font-size: 13px; font-family: inherit; cursor: pointer;
+  }
+  .editing .addbtn { display: block; }
+  .editing .row { cursor: pointer; }
+
+  .fld { display: block; margin-bottom: 10px; }
+  .fld > span { display: block; font-size: 12px; color: var(--steel); margin-bottom: 4px; }
+  .fld input, .fld textarea {
+    width: 100%; padding: 10px; font-family: inherit; font-size: 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: #f4f7f6; color: var(--ink);
+  }
+  .fld textarea { height: 72px; resize: vertical; line-height: 1.4; }
+  .chk { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 10px; font-size: 14px; cursor: pointer; }
+  .chk input { width: 20px; height: 20px; flex: 0 0 auto; margin: 0; }
+  .chk i { font-style: normal; display: block; font-size: 12px; color: var(--steel); margin-top: 2px; }
+  .sheetbox .save {
+    display: block; width: 100%; margin-top: 4px; padding: 13px;
+    background: var(--pine); color: #fff; border: 0; border-radius: 10px;
+    font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
+  .sheetbox .del {
+    display: block; width: 100%; margin-top: 8px; padding: 12px;
+    background: none; border: 1px solid #dcbcbc; border-radius: 10px;
+    color: #9c3a3a; font-size: 14px; font-family: inherit; cursor: pointer;
+  }
+
   .sheet {
     position: fixed; inset: 0; z-index: 40;
     background: rgba(20,32,29,.45);
@@ -222,9 +252,9 @@
 </div>
 
 <div class="editbar hide" id="editbar">
-  <span class="hint">Стрелките местят реда в неговата фаза. <b>→</b> го праща в друг ден или фаза.</span>
+  <span class="hint">Тапни ред, за да го редактираш. Стрелките го местят в неговата фаза, <b>→</b> го праща другаде.</span>
   <button type="button" id="exportbtn">Изнеси наредбата</button>
-  <button type="button" id="revertbtn">Върни изходната</button>
+  <button type="button" id="revertbtn">Върни всичко изходно</button>
   <button type="button" id="donebtn">Готово</button>
 </div>
 
@@ -274,6 +304,21 @@
     <h3>Премести в</h3>
     <p class="what" id="sheetwhat"></p>
     <div id="sheetlist"></div>
+    <button type="button" class="close" data-close>Отказ</button>
+  </div>
+</div>
+
+<div class="sheet hide" id="edsheet">
+  <div class="sheetbox">
+    <h3 id="edtitle">Редакция</h3>
+    <p class="what" id="edwhat"></p>
+    <label class="fld"><span>Какво се прави</span><input type="text" id="edt" autocomplete="off"></label>
+    <label class="fld"><span>Бележка (по избор)</span><textarea id="ednote"></textarea></label>
+    <label class="fld"><span>Минути</span><input type="number" id="edm" min="0" max="600" step="1" inputmode="numeric"></label>
+    <label class="chk"><input type="checkbox" id="edkey"><span>Критична<i>Болд. Пропуснеш ли я, чупи нещо непоправимо горе или пуска животно вътре.</i></span></label>
+    <label class="chk"><input type="checkbox" id="edwait"><span>Изчакване<i>Броят се отделно от работата, защото през тях вършиш друго.</i></span></label>
+    <button type="button" class="save" id="edsave">Запази</button>
+    <button type="button" class="del hide" id="eddel">Изтрий задачата</button>
     <button type="button" class="close" data-close>Отказ</button>
   </div>
 </div>
@@ -377,19 +422,49 @@
   var state = {};
   var KEY = "zazimyavane-2026";
   var LKEY = "zazimyavane-layout-2026";
+  var IKEY = "zazimyavane-items-2026";
 
   var DAYS = ["thu", "fri", "sat"];
   var DAYNAME = { thu: "Четвъртък", fri: "Петък", sat: "Събота" };
 
   // n е уникален и не се мени при разместване — по него се пазят отметките
-  var byN = {};
+  var BASEN = {};
   var PHASES = {};
   DAYS.forEach(function (day) {
     PHASES[day] = BASE[day].map(function (ph) {
-      ph.items.forEach(function (it) { byN[String(it.n)] = it; });
+      ph.items.forEach(function (it) { BASEN[String(it.n)] = it; });
       return { title: ph.title, water: !!ph.water };
     });
   });
+
+  // редакции върху BASE: n -> запис, или null за изтрита изходна задача
+  var edits = {};
+  var byN = {};
+
+  function merged(b, e) {
+    var o = { n: b.n, t: b.t, m: b.m, note: b.note, key: b.key, wait: b.wait };
+    if (e) {
+      if (e.t !== undefined) { o.t = e.t; }
+      if (e.m !== undefined) { o.m = e.m; }
+      if (e.note !== undefined) { o.note = e.note; }
+      if (e.key !== undefined) { o.key = e.key; }
+      if (e.wait !== undefined) { o.wait = e.wait; }
+    }
+    return o;
+  }
+
+  function resolve() {
+    byN = {};
+    Object.keys(BASEN).forEach(function (n) {
+      if (edits[n] === null) { return; }
+      byN[n] = merged(BASEN[n], edits[n]);
+    });
+    Object.keys(edits).forEach(function (n) {
+      if (edits[n] === null || BASEN[n]) { return; }
+      byN[n] = merged({ n: n, t: "", m: 0 }, edits[n]);
+    });
+  }
+  resolve();
 
   function baseLayout() {
     var l = {};
@@ -414,12 +489,24 @@
         });
       });
     });
+    // изходни задачи, изпаднали от наредбата, се връщат на мястото си
     DAYS.forEach(function (day) {
       base[day].forEach(function (ns, pi) {
         ns.forEach(function (n) {
-          if (!seen[n]) { seen[n] = true; out[day][pi].push(n); }
+          if (!byN[n] || seen[n]) { return; }
+          seen[n] = true;
+          out[day][pi].push(n);
         });
       });
+    });
+    // добавени задачи, изпаднали от наредбата, отиват във фазата, в която са създадени
+    Object.keys(byN).forEach(function (n) {
+      if (seen[n]) { return; }
+      var h = (edits[n] && edits[n].home) || ["thu", 0];
+      var d = out[h[0]] ? h[0] : "thu";
+      var pi = out[d][h[1]] ? h[1] : 0;
+      seen[n] = true;
+      out[d][pi].push(n);
     });
     return out;
   }
@@ -482,7 +569,8 @@
     r.addEventListener("click", function (e) {
       var b = e.target.closest ? e.target.closest("[data-act]") : null;
       if (b) { e.stopPropagation(); act(b.dataset.act, day, pi, n); return; }
-      if (!editing) { toggle(n); }
+      if (editing) { openEditor(day, pi, n); return; }
+      toggle(n);
     });
     r.addEventListener("keydown", function (e) {
       if (editing) return;
@@ -533,6 +621,12 @@
       }
       ns.forEach(function (n, ii) { rows.appendChild(rowEl(day, pi, ii, n)); });
       sec.appendChild(rows);
+      var add = document.createElement("button");
+      add.type = "button";
+      add.className = "addbtn";
+      add.textContent = "+ Добави задача тук";
+      add.addEventListener("click", function () { openEditor(day, pi, null); });
+      sec.appendChild(add);
       wrap.appendChild(sec);
     });
   }
@@ -600,6 +694,99 @@
   function closeSheets() {
     document.getElementById("sheet").classList.add("hide");
     document.getElementById("expsheet").classList.add("hide");
+    document.getElementById("edsheet").classList.add("hide");
+  }
+
+  var edCtx = null;
+
+  function openEditor(day, pi, n) {
+    var isNew = !n;
+    var it = isNew ? { t: "", m: 0, note: "", key: false, wait: false } : byN[n];
+    if (!it) { return; }
+    edCtx = { day: day, pi: pi, n: n };
+    document.getElementById("edtitle").textContent = isNew ? "Нова задача" : "Редакция";
+    document.getElementById("edwhat").textContent =
+      DAYNAME[day] + (PHASES[day].length > 1 ? " · " + PHASES[day][pi].title : "");
+    document.getElementById("edt").value = it.t || "";
+    document.getElementById("ednote").value = it.note || "";
+    document.getElementById("edm").value = it.m || 0;
+    document.getElementById("edkey").checked = !!it.key;
+    document.getElementById("edwait").checked = !!it.wait;
+    document.getElementById("eddel").classList.toggle("hide", isNew);
+    document.getElementById("edsheet").classList.remove("hide");
+  }
+
+  function saveEditor() {
+    if (!edCtx) { return; }
+    var t = document.getElementById("edt").value.replace(/\s+/g, " ").trim();
+    if (!t) { document.getElementById("edt").focus(); return; }
+    var m = parseInt(document.getElementById("edm").value, 10);
+    if (!(m >= 0)) { m = 0; }
+    var rec = {
+      t: t,
+      m: m,
+      note: document.getElementById("ednote").value.trim(),
+      key: document.getElementById("edkey").checked,
+      wait: document.getElementById("edwait").checked
+    };
+    var n = edCtx.n;
+    if (!n) {
+      n = "нова-" + Date.now().toString(36);
+      rec.home = [edCtx.day, edCtx.pi];
+      edits[n] = rec;
+      resolve();
+      layout[edCtx.day][edCtx.pi].push(n);
+    } else {
+      var old = edits[n];
+      if (old && old.home) { rec.home = old.home; }
+      else if (!BASEN[n]) { rec.home = [edCtx.day, edCtx.pi]; }
+      edits[n] = rec;
+      resolve();
+    }
+    saveItems();
+    saveLayout();
+    rebuild();
+    closeSheets();
+  }
+
+  function deleteEditor() {
+    if (!edCtx || !edCtx.n) { return; }
+    var n = edCtx.n;
+    if (!window.confirm("Да изтрия ли „" + byN[n].t + "“?")) { return; }
+    if (BASEN[n]) { edits[n] = null; } else { delete edits[n]; }
+    delete state[n];
+    DAYS.forEach(function (d) {
+      layout[d].forEach(function (ns) {
+        var i = ns.indexOf(n);
+        if (i >= 0) { ns.splice(i, 1); }
+      });
+    });
+    resolve();
+    saveItems();
+    saveLayout();
+    save();
+    rebuild();
+    closeSheets();
+  }
+
+  // пълната наредба със съдържанието, готова да замени BASE
+  function exportData() {
+    var out = {};
+    DAYS.forEach(function (day) {
+      out[day] = PHASES[day].map(function (ph, pi) {
+        var o = { title: ph.title };
+        if (ph.water) { o.water = true; }
+        o.items = layout[day][pi].map(function (n) {
+          var it = byN[n], r = { n: n, t: it.t, m: it.m };
+          if (it.wait) { r.wait = true; }
+          if (it.key) { r.key = true; }
+          if (it.note) { r.note = it.note; }
+          return r;
+        });
+        return o;
+      });
+    });
+    return JSON.stringify(out, null, 2);
   }
 
   function refresh() {
@@ -641,6 +828,7 @@
 
   function save() { put(KEY, JSON.stringify(state)); }
   function saveLayout() { put(LKEY, JSON.stringify(layout)); }
+  function saveItems() { put(IKEY, JSON.stringify(edits)); }
 
   // старите отметки бяха по позиция (thu-0-3); превежда ги към номер на задача
   function migrate(old) {
@@ -657,25 +845,32 @@
   }
 
   function load() {
-    function apply(rawState, rawLayout) {
+    function apply(rawState, rawLayout, rawItems) {
+      try { if (rawItems) { edits = JSON.parse(rawItems) || {}; } }
+      catch (e) { edits = {}; }
+      resolve();
       try { if (rawState) { state = migrate(JSON.parse(rawState) || {}); } }
       catch (e) { state = {}; }
-      try { if (rawLayout) { layout = normalize(JSON.parse(rawLayout)); } }
-      catch (e) { layout = baseLayout(); }
+      try { layout = normalize(rawLayout ? JSON.parse(rawLayout) : null); }
+      catch (e) { layout = normalize(null); }
       rebuild();
     }
     if (window.storage && window.storage.get) {
       Promise.resolve()
         .then(function () {
-          return Promise.all([window.storage.get(KEY, false), window.storage.get(LKEY, false)]);
+          return Promise.all([
+            window.storage.get(KEY, false),
+            window.storage.get(LKEY, false),
+            window.storage.get(IKEY, false)
+          ]);
         })
         .then(function (r) {
-          apply(r[0] && r[0].value, r[1] && r[1].value);
+          apply(r[0] && r[0].value, r[1] && r[1].value, r[2] && r[2].value);
         })
-        .catch(function () { apply(null, null); });
+        .catch(function () { apply(null, null, null); });
       return;
     }
-    apply(getLocal(KEY), getLocal(LKEY));
+    apply(getLocal(KEY), getLocal(LKEY), getLocal(IKEY));
   }
 
   document.querySelectorAll(".tabs button").forEach(function (t) {
@@ -703,8 +898,12 @@
     setEditing(false);
   });
 
+  document.getElementById("edsave").addEventListener("click", saveEditor);
+  document.getElementById("eddel").addEventListener("click", deleteEditor);
+
   document.getElementById("exportbtn").addEventListener("click", function () {
-    document.getElementById("exptext").value = JSON.stringify(layout, null, 2);
+    document.getElementById("exptext").value = exportData();
+    document.getElementById("edsheet").classList.add("hide");
     document.getElementById("expsheet").classList.remove("hide");
   });
 
@@ -720,7 +919,11 @@
   });
 
   document.getElementById("revertbtn").addEventListener("click", function () {
+    if (!window.confirm("Да върна ли наредбата и текстовете както са в repo-то? Твоите промени тук се губят.")) { return; }
+    edits = {};
+    resolve();
     layout = baseLayout();
+    saveItems();
     saveLayout();
     rebuild();
   });
