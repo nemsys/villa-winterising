@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d4a3e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Зазимяване">
+<meta name="robots" content="noindex">
+<title>Зазимяване на вилата — Пирин</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #eef1f0; }
+</style>
+</head>
+<body>
+<div id="app">
+<style>
+  #app {
+    --paper: #eef1f0;
+    --card: #ffffff;
+    --ink: #14201d;
+    --pine: #1d4a3e;
+    --steel: #66766f;
+    --line: #d2dad7;
+    --water: #1a5b78;
+    --open: #96660a;
+    --done: #7c8b85;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    margin: 0 auto;
+    max-width: 560px;
+    padding: 0 0 64px;
+    -webkit-text-size-adjust: 100%;
+  }
+  #app * { box-sizing: border-box; }
+
+  .top {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--pine); color: #fff;
+    padding: 14px 16px 0;
+  }
+  .top h1 {
+    margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .top .sub { margin: 3px 0 12px; font-size: 13px; color: #a9c8bd; }
+  .clock {
+    display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px;
+  }
+  .clock .big { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .clock .lbl { font-size: 12px; color: #a9c8bd; }
+  .wsum { font-size: 12px; color: #a9c8bd; margin: -6px 0 10px; }
+  .bar { height: 5px; background: rgba(255,255,255,.2); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: #7fd6ae; width: 0; transition: width .25s ease; }
+
+  .tabs { display: flex; margin-top: 12px; }
+  .tabs button {
+    flex: 1; appearance: none; border: 0; background: transparent;
+    color: #a9c8bd; font-size: 13px; font-weight: 600; font-family: inherit;
+    padding: 11px 2px 10px; border-bottom: 3px solid transparent; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: #fff; border-bottom-color: #7fd6ae; }
+  .tabs button:focus-visible { outline: 2px solid #7fd6ae; outline-offset: -3px; }
+
+  .dayhead { margin: 18px 12px 0; padding: 0 4px; }
+  .dayhead h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .dayhead .tot { margin-top: 3px; font-size: 13px; color: var(--steel); font-variant-numeric: tabular-nums; }
+  .phase { margin: 20px 12px 0; }
+  .phase > header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 0 6px 7px; border-bottom: 2px solid var(--pine);
+  }
+  .phase > header b { font-size: 15px; font-weight: 700; }
+  .phase > header span { font-size: 13px; color: var(--steel); font-variant-numeric: tabular-nums; }
+  .phase.water > header { border-bottom-color: var(--water); }
+  .phase.water > header b { color: var(--water); }
+
+  .rows { background: var(--card); border: 1px solid var(--line); border-top: 0; }
+  .phase > .rows:first-child { border-top: 1px solid var(--line); }
+
+  .row {
+    display: flex; align-items: flex-start; gap: 12px;
+    width: 100%; text-align: left; font-family: inherit;
+    padding: 14px 12px; background: none; border: 0;
+    border-bottom: 1px solid var(--line); cursor: pointer;
+    min-height: 56px;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row:focus-visible { outline: 2px solid var(--pine); outline-offset: -2px; }
+
+  .box {
+    flex: 0 0 24px; width: 24px; height: 24px; margin-top: 1px;
+    border: 2px solid var(--steel); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .box svg { width: 15px; height: 15px; opacity: 0; }
+  .row[aria-checked="true"] .box { background: var(--pine); border-color: var(--pine); }
+  .row[aria-checked="true"] .box svg { opacity: 1; }
+
+  .txt { flex: 1; min-width: 0; }
+  .txt .t { font-size: 15px; line-height: 1.35; }
+  .txt .n { display: block; margin-top: 4px; font-size: 13px; line-height: 1.4; color: var(--steel); }
+  .row[aria-checked="true"] .txt .t { color: var(--done); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .row[aria-checked="true"] .txt .n { color: #a3aeaa; }
+
+  .min {
+    flex: 0 0 auto; font-size: 13px; font-weight: 600; color: var(--steel);
+    font-variant-numeric: tabular-nums; padding-top: 2px;
+  }
+
+  .row.wait { background: #f5f8f7; }
+  .row.wait .min { color: var(--water); }
+  .row.key .txt .t { font-weight: 700; }
+
+  .note {
+    margin: 10px 12px 0; padding: 12px 14px;
+    background: #fdf6e6; border-left: 3px solid var(--open);
+    font-size: 14px; line-height: 1.45;
+  }
+  .note b { font-weight: 700; }
+
+  .final { margin: 24px 12px 0; }
+  .final h2 { font-size: 15px; margin: 0 0 4px; }
+  .final p { font-size: 13px; color: var(--steel); margin: 0 0 12px; line-height: 1.4; }
+  .final ul { list-style: none; margin: 0 0 16px; padding: 0; background: var(--card); border: 1px solid var(--line); }
+  .final li { padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.35; display: flex; gap: 10px; }
+  .final li:last-child { border-bottom: 0; }
+  .final li em { font-style: normal; font-weight: 700; flex: 0 0 auto; }
+  .final .op li em { color: var(--open); }
+  .final .cl li em { color: var(--pine); }
+
+  .reset {
+    display: block; margin: 26px auto 0; padding: 11px 20px;
+    background: none; border: 1px solid var(--line); border-radius: 8px;
+    color: var(--steel); font-size: 13px; font-family: inherit; cursor: pointer;
+  }
+  .hide { display: none; }
+  @media (prefers-reduced-motion: reduce) { #app * { transition: none !important; } }
+</style>
+
+<div class="top">
+  <h1>Зазимяване на вилата</h1>
+  <div class="sub">Пирин · петък–събота</div>
+  <div class="clock">
+    <span class="lbl" id="leftpre">остава</span>
+    <span class="big" id="left">—</span>
+    <span class="lbl" id="leftlbl">работа</span>
+  </div>
+  <div class="wsum" id="wsum"></div>
+  <div class="bar"><i id="fill"></i></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-day="thu" aria-selected="true">Четвъртък</button>
+    <button role="tab" data-day="fri" aria-selected="false">Петък</button>
+    <button role="tab" data-day="sat" aria-selected="false">Събота</button>
+    <button role="tab" data-day="chk" aria-selected="false">Проверка</button>
+  </div>
+</div>
+
+<div id="thu"></div>
+<div id="fri" class="hide"></div>
+<div id="sat" class="hide"></div>
+
+<div id="chk" class="hide">
+  <div class="final">
+    <h2>Преди да заключиш</h2>
+    <p>Мини списъка едно по едно. Ако нещо не съвпада, значи си пропуснала стъпка.</p>
+
+    <h2>Остава отворено цяла зима</h2>
+    <ul class="op">
+      <li><em>1</em><span>Червеният кран на бойлера — отворен докрай</span></li>
+      <li><em>2</em><span>Черното лостче на комбинирания клапан на бойлера — вдигнато</span></li>
+      <li><em>3</em><span>Изпускателното кранче на червения кран на бойлера</span></li>
+      <li><em>4</em><span>Батериите свалени; останалите на стената — отворени, лост в средата</span></li>
+      <li><em>5</em><span>Кранът към казанчето в тоалетната</span></li>
+      <li><em>6</em><span>Капачката на филтъра отвън, мрежата извадена и в плик</span></li>
+      <li><em>7</em><span>Изпускателното кранче на главния кран отвън</span></li>
+      <li><em>8</em><span>Вратата на хладилника</span></li>
+    </ul>
+
+    <h2>Остава затворено</h2>
+    <ul class="cl">
+      <li><em>1</em><span>Главният кран отвън</span></li>
+      <li><em>2</em><span>Клапите и вратата на печката</span></li>
+      <li><em>3</em><span>Прозорците, с пердета спуснати</span></li>
+    </ul>
+
+    <div class="note">
+      <b>Не връщай нищо на място.</b> Нито мрежата на филтъра, нито капачки, нито пробки. Затворената система няма къде да поеме леда.
+    </div>
+
+    <div class="note" style="border-left-color:#1a5b78;background:#eef5f8">
+      <b>В плика с дребните части:</b> гумичките от гайките на маркуча на казанчето, мрежата на филтъра и тапата от изпускателя на бойлера, ако е излязла цяла. Батериите са отделно, на рафт с чучура надолу.
+    </div>
+  </div>
+</div>
+
+<button class="reset" id="reset">Изчисти всички отметки</button>
+
+<script>
+(function () {
+  var DATA = {
+    thu: [
+      { title: "Подготовка", time: "≈2 ч 20 мин", items: [
+        { n: "Ч1", t: "Измий туристическите обувки", m: 20, key: true, note: "Днес, за да имат два дни да изсъхнат" },
+        { n: "Ч2", t: "Провери имаш ли всичко за зазимяването", m: 15, key: true, note: "Телчета за съдове, найлонови пликове, тиксо, парцали, сол, парче маркуч, WD-40. Горе не се купува нищо" },
+        { n: "Ч2б", t: "Изолирай капандурата към втория етаж", m: 30, key: true, note: "Днес, докато стълбата е още на място. Стиропор или дъска по мярка, телена мрежа или стоманена вълна отгоре, ръбовете уплътнени" },
+        { n: "Ч2в", t: "Сложи нова торбичка на прахосмукачката", m: 20, note: "Сега, за да разбереш още днес, ако нямаш резервна. В събота ще духа, не ще смуче" },
+        { n: "Ч3", t: "Прибери всичко от простора", m: 5 },
+        { n: "Ч3б", t: "Прибери гъбите, които съхнат", m: 10, note: "В хартиени или платнени торбички, не в найлон" },
+        { n: "Ч4", t: "Разпредели храната за два дни, да не остане нищо", m: 10, note: "Каквото остане, се сваля или се изхвърля" },
+        { n: "Ч5", t: "Започни да събираш боклука за сваляне", m: 15, note: "Довършваш го в събота — до тогава ще се натрупа още" },
+        { n: "Ч6", t: "Извади каквото ще носиш надолу и виж събира ли се", m: 10, note: "По-добре сега, отколкото на прага в събота" },
+        { n: "Ч7", t: "Зареди телефона, външната батерия и фенера", m: 5 }
+      ]}
+    ],
+    fri: [
+      { title: "Двор", time: "≈1 ч 30 мин", items: [
+        { n: 42, t: "Камъни и пръст до оголената мазилка", m: 30 },
+        { n: 41, t: "Прочисти канавката на метър от стената", m: 20 },
+        { n: 39, t: "Разчисти терасата, прибери мебелите", m: 20 },
+        { n: "39б", t: "Прибери стълбата", m: 10, note: "Чак след капандурата. На закрито и легнала, не изправена на стена" },
+        { n: "39в", t: "Махни разклонителя с външната лампа", m: 5, note: "Прибери го вътре и сух" },
+        { n: 35, t: "Прибери външната кофа вътре", m: 5, note: "Иначе събира сняг и се пука" }
+      ]},
+      { title: "Вътре", time: "≈1 ч 10 мин", items: [
+        { n: 28, t: "Изнеси всичко ядиво, семена, свещи, сапун", m: 15, note: "Заради мишките и съселите" },
+        { n: 29, t: "Прибери текстила в метални кутии или чували", m: 15, note: "Каквото остане меко, става гнездо" },
+        { n: 30, t: "Извади батериите от фенери, часовници, уреди", m: 5 },
+        { n: 33, t: "Прибери бутилките в кофа на пода", m: 10, note: "Изправени, парцал между стъклените, до вътрешна стена. Виното, бирата и соковете — тях изнеси" },
+        { n: 36, t: "Стегни багажа за града", m: 15, note: "Дрехи за пране, пари, ключове, телефони и зарядни, техника, котлонът" },
+        { n: 3, t: "Приготви инструментите и пликчетата за утре", m: 10, note: "Кофа, маркуч, гъба, парцали, ключ, маркер" }
+      ]},
+      { title: "Вечерта", time: "2 мин", items: [
+        { n: "★", t: "Изключи бойлера от неговия ключ", m: 2, key: true, note: "Червеното копче отдолу на бойлера. Бушонът остава, защото храни и хладилника" }
+      ]}
+    ],
+    sat: [
+      { title: "Вода", time: "≈30 мин работа + 50 мин източване", water: true, items: [
+        { n: "4а", t: "Напълни туба и кофа с вода за деня", m: 5, key: true, note: "За солния разтвор, за пепелта накрая, за ръцете и за пиене. После вода няма" },
+        { n: 4, t: "Затвори главния кран отвън, зад вилата", m: 1, key: true },
+        { n: 5, t: "Отвори всички чешми, лост в средно положение", m: 5, key: true, note: "Задължително преди следващата стъпка — за въздух" },
+        { n: 6, t: "Развий капачката на филтъра отвън, извади мрежата", m: 5, key: true, note: "Оттук излиза водата на вилата" },
+        { n: 7, t: "Отвори изпускателното кранче на главния кран отвън", m: 2, note: "Долната страна на системата" },
+        { n: 8, t: "Изчакай разводката да се източи", m: 20, wait: true, note: "Върви прави останалото" },
+        { n: 9, t: "Отвори червения кран на бойлера докрай и го остави отворен", m: 1, key: true, note: "Без него бойлерът не се източва — държи го вакуум" },
+        { n: 10, t: "Маркуч на изхода на комбинирания клапан на бойлера към кофа", m: 5, note: "Предстоят 75 литра" },
+        { n: 11, t: "Вдигни черното лостче на бойлера", m: 1, key: true },
+        { n: 12, t: "Изчакай бойлерът да се източи", m: 30, wait: true, note: "Върви прави останалото" },
+        { n: 13, t: "Накрая развий тапата на изпускателя на червения кран на бойлера", m: 3, key: true, note: "Чак след като бойлерът е празен. Чаша и парцал отдолу; тръгне ли лесно навън, свали я цяла и в плика" }
+      ]},
+      { title: "Батерии и остатъци", time: "≈50 мин", items: [
+        { n: 14, t: "Развий душ-маркуча, изтръскай, окачи прав", m: 5 },
+        { n: 15, t: "Свали батериите от банята и кухнята", m: 25, note: "Изтръскай ги с чучура надолу и ги остави на рафт вътре, необвити. Не форсирай — не тръгва ли някоя, остави я на стената отворена" },
+        { n: 16, t: "Продухай с прахосмукачката", m: 15, note: "Обърни маркуча на изхода и го продухай на празно първо, за да излезе прахът от него" },
+        { n: 17, t: "Развий маркуча на казанчето от двете страни", m: 5, note: "Гумичките от гайките в плика" },
+        { n: 18, t: "Кранът към казанчето — отворен, не се развива", m: 1, key: true }
+      ]},
+      { title: "Сифони — след цялата вода", time: "≈35 мин", items: [
+        { n: 19, t: "Пусни казанчето веднъж, после избърши остатъка с гъба", m: 5 },
+        { n: 20, t: "Изгреби водата от сифона на чинията", m: 5 },
+        { n: 21, t: "Разтвори 100 г сол в топла вода, излей в сифона", m: 5, note: "Разтвор, не суха сол" },
+        { n: 22, t: "Същото за сифоните на мивките", m: 10 },
+        { n: "22б", t: "Подовият сифон в банята: изгреби, стоманена вълна, найлон с парцал", m: 10, key: true, note: "Решетката отгоре и нещо тежко върху нея. През зимата водата се изпарява и оттам влизат мишки" },
+        { n: 23, t: "Затвори капака на чинията", m: 1 }
+      ]},
+      { title: "Затваряне", time: "≈2 ч 10 мин", items: [
+        { n: 43, t: "Затвори прозорците и спусни пердетата", m: 10, note: "Пердетата да не допират стъклото — там се събира конденз" },
+        { n: 32, t: "Изпразни хладилника, месото в чантата най-отдолу", m: 10, note: "Последно, за да остане замразено най-дълго" },
+        { n: "32б", t: "Извади рафтовете, изсуши, остави вратата отворена", m: 10 },
+        { n: "32в", t: "Почисти минифурната, подсуши я, врата затворена", m: 10, note: "Кабелът навит и вдигнат от пода. Без найлон отгоре — задържа влага" },
+        { n: 31, t: "Изключи главния прекъсвач", m: 1, key: true, note: "След прахосмукачката и след хладилника — дотогава ти трябва ток" },
+        { n: 45, t: "Снимай всеки спрян кран и всяка отворена пробка", m: 10, note: "За догодина" },
+        { n: "45б", t: "Довърши багажа и обиколи стаите за забравено", m: 10, note: "Зарядни в контактите, телефон, ключове" },
+        { n: "45в", t: "Довърши боклука и го стегни за сваляне", m: 10 },
+        { n: 37, t: "Изолирай тръбите отвън със сивите цилиндри", m: 30, note: "Стегни среза с тиксо или тел. Крана, филтъра и редуцира — отделно с дрехи и найлон отгоре с наклон. Всичко да е сухо" },
+        { n: 38, t: "Провери изхода на изпускателното кранче на главния кран отвън да не се затрупа", m: 5, note: "Камък или парче тръба отстрани" },
+        { n: 24, t: "Изгреби пепелта и я изхвърли на мястото ѝ", m: 15, note: "Горещата жар в метално ведро отвън, на камък" },
+        { n: 25, t: "Затвори клапите и вратата на печката", m: 2 },
+        { n: 44, t: "Смажи катинара отвътре, найлон като качулка", m: 5, note: "Последно, вече с чантата на рамо" }
+      ]}
+    ]
+  };
+
+  var app = document.getElementById("app");
+  var state = {};
+  var KEY = "zazimyavane-2026";
+
+  function id(day, pi, ii) { return day + "-" + pi + "-" + ii; }
+
+  var DAYNAME = { thu: "Четвъртък", fri: "Петък", sat: "Събота" };
+
+  function build(day) {
+    var wrap = document.getElementById(day);
+    wrap.innerHTML = "";
+    var work = 0, wait = 0;
+    DATA[day].forEach(function (ph) {
+      ph.items.forEach(function (it) {
+        if (it.wait) { wait += it.m || 0; } else { work += it.m || 0; }
+      });
+    });
+    var dh = document.createElement("div");
+    dh.className = "dayhead";
+    dh.innerHTML = "<h2></h2><div class='tot'></div>";
+    dh.querySelector("h2").textContent = DAYNAME[day];
+    dh.querySelector(".tot").textContent =
+      "общо " + fmt(work) + " работа" + (wait ? " + " + fmt(wait) + " източване" : "");
+    wrap.appendChild(dh);
+    DATA[day].forEach(function (ph, pi) {
+      var sec = document.createElement("section");
+      sec.className = "phase" + (ph.water ? " water" : "");
+      if (DATA[day].length > 1) {
+        var h = document.createElement("header");
+        h.innerHTML = "<b></b><span></span>";
+        h.querySelector("b").textContent = ph.title;
+        h.querySelector("span").textContent = ph.time;
+        sec.appendChild(h);
+      } else {
+        sec.style.marginTop = "12px";
+      }
+      var rows = document.createElement("div");
+      rows.className = "rows";
+      ph.items.forEach(function (it, ii) {
+        var key = id(day, pi, ii);
+        var b = document.createElement("button");
+        b.className = "row" + (it.wait ? " wait" : "") + (it.key ? " key" : "");
+        b.setAttribute("role", "checkbox");
+        b.setAttribute("aria-checked", "false");
+        b.dataset.key = key;
+        b.dataset.min = it.m;
+        b.dataset.wait = it.wait ? "1" : "";
+        b.innerHTML =
+          '<span class="box"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8.5l4 4L14 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+          '<span class="txt"><span class="t"></span></span>' +
+          '<span class="min"></span>';
+        b.querySelector(".t").textContent = it.t;
+        if (it.note) {
+          var n = document.createElement("span");
+          n.className = "n";
+          n.textContent = it.note;
+          b.querySelector(".txt").appendChild(n);
+        }
+        b.querySelector(".min").textContent = it.m ? it.m + "′" : "";
+        b.addEventListener("click", function () { toggle(key); });
+        rows.appendChild(b);
+      });
+      sec.appendChild(rows);
+      wrap.appendChild(sec);
+    });
+  }
+
+  function fmt(mins) {
+    if (mins <= 0) return "Всичко е отметнато";
+    var h = Math.floor(mins / 60), m = mins % 60;
+    if (h && m) return h + " ч " + m + " мин";
+    if (h) return h + " ч";
+    return m + " мин";
+  }
+
+  function refresh() {
+    var rows = app.querySelectorAll(".row");
+    var totalWork = 0, leftWork = 0, leftWait = 0, done = 0, all = 0;
+    rows.forEach(function (r) {
+      var on = state[r.dataset.key] === true;
+      r.setAttribute("aria-checked", on ? "true" : "false");
+      var m = parseInt(r.dataset.min, 10) || 0;
+      if (r.dataset.wait) { if (!on) leftWait += m; }
+      else { totalWork += m; if (!on) leftWork += m; }
+      all++; if (on) done++;
+    });
+    document.getElementById("wsum").textContent =
+      leftWait > 0 ? "+ " + fmt(leftWait) + " източване" : "";
+    document.getElementById("left").textContent = fmt(leftWork);
+    document.getElementById("leftpre").style.display = leftWork <= 0 ? "none" : "";
+    document.getElementById("leftlbl").textContent = leftWork <= 0 ? "" : "работа";
+    document.getElementById("fill").style.width =
+      (totalWork ? Math.round((1 - leftWork / totalWork) * 100) : 0) + "%";
+  }
+
+  function toggle(key) {
+    state[key] = !state[key];
+    refresh();
+    save();
+  }
+
+  function save() {
+    try {
+      if (window.storage && window.storage.set) {
+        window.storage.set(KEY, JSON.stringify(state), false);
+      } else if (window.localStorage) {
+        window.localStorage.setItem(KEY, JSON.stringify(state));
+      }
+    } catch (e) { /* отметките остават само за тази сесия */ }
+  }
+
+  function load() {
+    if (!(window.storage && window.storage.get)) {
+      try {
+        var raw = window.localStorage && window.localStorage.getItem(KEY);
+        if (raw) { state = JSON.parse(raw) || {}; }
+      } catch (e) { state = {}; }
+      refresh();
+      return;
+    }
+    Promise.resolve()
+      .then(function () { return window.storage.get(KEY, false); })
+      .then(function (res) {
+        if (res && res.value) { state = JSON.parse(res.value) || {}; }
+      })
+      .catch(function () { state = {}; })
+      .then(function () { refresh(); });
+  }
+
+  document.querySelectorAll(".tabs button").forEach(function (t) {
+    t.addEventListener("click", function () {
+      document.querySelectorAll(".tabs button").forEach(function (o) {
+        o.setAttribute("aria-selected", o === t ? "true" : "false");
+      });
+      ["thu", "fri", "sat", "chk"].forEach(function (d) {
+        document.getElementById(d).classList.toggle("hide", d !== t.dataset.day);
+      });
+      window.scrollTo(0, 0);
+    });
+  });
+
+  document.getElementById("reset").addEventListener("click", function () {
+    state = {};
+    refresh();
+    save();
+  });
+
+  build("thu");
+  build("fri");
+  build("sat");
+  load();
+})();
+</script>
+</div>
+</body>
+</html>
