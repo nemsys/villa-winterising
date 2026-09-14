@@ -171,12 +171,52 @@
   .empty { padding: 14px 12px; font-size: 13px; color: var(--steel); font-style: italic; }
 
   .addbtn {
-    display: none; width: calc(100% - 24px); margin: 8px 12px 0; padding: 11px;
+    display: block; width: calc(100% - 24px); margin: 6px 12px 0; padding: 9px;
     background: none; border: 1px dashed var(--line); border-radius: 8px;
-    color: var(--pine); font-size: 13px; font-family: inherit; cursor: pointer;
+    color: var(--steel); font-size: 13px; font-family: inherit; cursor: pointer;
   }
-  .editing .addbtn { display: block; }
+  .editing .addbtn { color: var(--pine); padding: 11px; }
   .editing .row { cursor: pointer; }
+
+  .pen {
+    flex: 0 0 auto; align-self: center;
+    width: 36px; height: 36px; margin: -8px -6px -8px -4px; padding: 0;
+    border: 0; border-radius: 8px; background: none;
+    color: var(--steel); font-size: 17px; line-height: 1; font-family: inherit; cursor: pointer;
+  }
+  .pen:focus-visible { outline: 2px solid var(--pine); outline-offset: -2px; }
+  .editing .pen { display: none; }
+
+  .txt .mine {
+    display: block; margin-top: 7px; padding: 6px 9px;
+    font-size: 13px; line-height: 1.4; color: #153f52;
+    background: #eaf3f7; border-left: 3px solid var(--water); border-radius: 0 6px 6px 0;
+    white-space: pre-line;
+  }
+  .txt .mine i { font-style: normal; color: var(--steel); font-size: 12px; }
+
+  .minebox {
+    margin: 0 -14px 14px; padding: 12px 14px 4px;
+    background: #eaf3f7; border-top: 1px solid #cfe1e9; border-bottom: 1px solid #cfe1e9;
+  }
+  .minebox .fld textarea { background: #fff; height: 84px; }
+  .minebox .mdate { margin: -4px 0 8px; font-size: 12px; color: var(--steel); }
+  .sect { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--steel); text-transform: uppercase; letter-spacing: .04em; }
+
+  .arch {
+    margin: 28px 12px 0; padding: 14px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  }
+  .arch h2 { margin: 0 0 4px; font-size: 15px; }
+  .arch p { margin: 0 0 12px; font-size: 13px; line-height: 1.4; color: var(--steel); }
+  .arch p.warn { color: #8a5a00; }
+  .arch .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .arch button {
+    flex: 1 1 140px; padding: 11px 12px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
+  .arch .primary { background: var(--pine); color: #fff; border: 0; }
+  .arch .secondary { background: none; color: var(--pine); border: 1px solid var(--line); }
 
   .fld { display: block; margin-bottom: 10px; }
   .fld > span { display: block; font-size: 12px; color: var(--steel); margin-bottom: 4px; }
@@ -220,7 +260,7 @@
   .opt b { font-size: 14px; }
   .opt span { font-size: 13px; color: var(--steel); }
   .opt.cur { opacity: .5; }
-  .sheetbox textarea {
+  #exptext, #artext {
     width: 100%; height: 210px; font-family: ui-monospace, Menlo, Consolas, monospace;
     font-size: 11px; line-height: 1.4; padding: 10px;
     border: 1px solid var(--line); border-radius: 8px; background: #f4f7f6; color: var(--ink);
@@ -296,8 +336,17 @@
   </div>
 </div>
 
+<div class="arch">
+  <h2>Архив на бележките</h2>
+  <p id="archstat"></p>
+  <div class="btns">
+    <button type="button" class="primary" id="archsend">Изпрати архив</button>
+    <button type="button" class="secondary" id="archload">Внеси архив</button>
+  </div>
+</div>
+
 <button class="reset" id="reset">Изчисти всички отметки</button>
-<button class="editbtn" id="editbtn" type="button">Подредба на задачите</button>
+<button class="editbtn" id="editbtn" type="button">Разместване на задачите</button>
 
 <div class="sheet hide" id="sheet">
   <div class="sheetbox">
@@ -312,8 +361,13 @@
   <div class="sheetbox">
     <h3 id="edtitle">Редакция</h3>
     <p class="what" id="edwhat"></p>
+    <div class="minebox">
+      <label class="fld"><span>📍 Моя бележка — къде го оставих, какво видях</span><textarea id="edmine" placeholder="Остава за догодина. Излиза под задачата."></textarea></label>
+      <p class="mdate" id="edminedate"></p>
+    </div>
+    <p class="sect">Задачата</p>
     <label class="fld"><span>Какво се прави</span><input type="text" id="edt" autocomplete="off"></label>
-    <label class="fld"><span>Бележка (по избор)</span><textarea id="ednote"></textarea></label>
+    <label class="fld"><span>Указание (по избор)</span><textarea id="ednote"></textarea></label>
     <label class="fld"><span>Минути</span><input type="number" id="edm" min="0" max="600" step="1" inputmode="numeric"></label>
     <label class="chk"><input type="checkbox" id="edkey"><span>Критична<i>Болд. Пропуснеш ли я, чупи нещо непоправимо горе или пуска животно вътре.</i></span></label>
     <label class="chk"><input type="checkbox" id="edwait"><span>Изчакване<i>Броят се отделно от работата, защото през тях вършиш друго.</i></span></label>
@@ -329,6 +383,24 @@
     <p class="what">Копирай това и ми го прати, за да стане новата изходна наредба в repo-то.</p>
     <textarea id="exptext" readonly></textarea>
     <button type="button" class="close" id="copybtn">Копирай</button>
+    <button type="button" class="close" data-close>Затвори</button>
+  </div>
+</div>
+
+<div class="sheet hide" id="arsheet">
+  <div class="sheetbox">
+    <h3 id="artitle">Архив</h3>
+    <p class="what" id="arwhat"></p>
+    <textarea id="artext"></textarea>
+    <div id="arsendbtns">
+      <button type="button" class="save" id="arcopy">Копирай</button>
+      <a class="close" id="arsave" style="text-align:center;text-decoration:none;box-sizing:border-box">Свали като файл</a>
+    </div>
+    <div id="arloadbtns">
+      <input type="file" id="arfile" accept=".txt,.json,text/plain,application/json" class="hide">
+      <button type="button" class="save" id="arpick">Избери файл с архива</button>
+      <button type="button" class="close" id="arimport">Внеси поставения текст</button>
+    </div>
     <button type="button" class="close" data-close>Затвори</button>
   </div>
 </div>
@@ -425,6 +497,9 @@
   var KEY = "zazimyavane-2026";
   var LKEY = "zazimyavane-layout-2026";
   var IKEY = "zazimyavane-items-2026";
+  var NKEY = "zazimyavane-notes-2026";
+  var AKEY = "zazimyavane-archive-2026";
+  var ARCHAPP = "vila-zazimyavane";
 
   var DAYS = ["thu", "fri", "sat"];
   var DAYNAME = { thu: "Четвъртък", fri: "Петък", sat: "Събота" };
@@ -442,6 +517,13 @@
   // редакции върху BASE: n -> запис, или null за изтрита изходна задача
   var edits = {};
   var byN = {};
+
+  // личните бележки („къде оставих“): n -> { t: текст, d: кога е писана }.
+  // Отделни от редакциите — не влизат в изнесената наредба и в repo-то.
+  var notes = {};
+
+  // кога за последно е изпратен архив и кога е последната промяна след него
+  var arch = { at: 0, changed: 0 };
 
   function merged(b, e) {
     var o = { n: b.n, t: b.t, m: b.m, note: b.note, key: b.key, wait: b.wait };
@@ -537,6 +619,13 @@
   var layout = baseLayout();
   var editing = false;
 
+  function dateBg(ms) {
+    if (!ms) return "";
+    var d = new Date(ms);
+    function p(x) { return (x < 10 ? "0" : "") + x; }
+    return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear();
+  }
+
   function dur(mins) {
     var h = Math.floor(mins / 60), m = mins % 60;
     if (h && m) return h + " ч " + m + " мин";
@@ -575,6 +664,7 @@
       '<span class="box"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8.5l4 4L14 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
       '<span class="txt"><span class="t"></span></span>' +
       '<span class="min"></span>' +
+      '<button type="button" class="pen" data-act="edit" aria-label="Бележка и редакция">✎</button>' +
       '<span class="rowctl">' +
         '<button type="button" data-act="up" aria-label="Нагоре">↑</button>' +
         '<button type="button" data-act="down" aria-label="Надолу">↓</button>' +
@@ -587,6 +677,15 @@
       nt.textContent = it.note;
       r.querySelector(".txt").appendChild(nt);
     }
+    if (notes[n]) {
+      var mn = document.createElement("span");
+      mn.className = "mine";
+      mn.textContent = "📍 " + notes[n].t + " ";
+      var md = document.createElement("i");
+      md.textContent = "· " + dateBg(notes[n].d);
+      mn.appendChild(md);
+      r.querySelector(".txt").appendChild(mn);
+    }
     r.querySelector(".min").textContent = it.m ? it.m + "′" : "";
 
     r.addEventListener("click", function (e) {
@@ -596,7 +695,7 @@
       toggle(n);
     });
     r.addEventListener("keydown", function (e) {
-      if (editing) return;
+      if (editing || e.target !== r) return;
       if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(n); }
     });
     return r;
@@ -657,6 +756,7 @@
   function rebuild() {
     DAYS.forEach(build);
     refresh();
+    archStatus();
   }
 
   function showDay(day) {
@@ -669,6 +769,7 @@
   }
 
   function act(a, day, pi, n) {
+    if (a === "edit") { openEditor(day, pi, n); return; }
     var arr = layout[day][pi];
     var ii = arr.indexOf(n);
     if (ii < 0) return;
@@ -677,6 +778,7 @@
     else if (a === "down" && ii < arr.length - 1) { arr.splice(ii, 1); arr.splice(ii + 1, 0, n); }
     else { return; }
     saveLayout();
+    touch();
     rebuild();
   }
 
@@ -687,6 +789,7 @@
     from.splice(i, 1);
     layout[td][tp].push(n);
     saveLayout();
+    touch();
     rebuild();
     showDay(td);
   }
@@ -715,9 +818,7 @@
   }
 
   function closeSheets() {
-    document.getElementById("sheet").classList.add("hide");
-    document.getElementById("expsheet").classList.add("hide");
-    document.getElementById("edsheet").classList.add("hide");
+    document.querySelectorAll(".sheet").forEach(function (sh) { sh.classList.add("hide"); });
   }
 
   var edCtx = null;
@@ -735,6 +836,9 @@
     document.getElementById("edm").value = it.m || 0;
     document.getElementById("edkey").checked = !!it.key;
     document.getElementById("edwait").checked = !!it.wait;
+    var mine = (!isNew && notes[n]) || null;
+    document.getElementById("edmine").value = mine ? mine.t : "";
+    document.getElementById("edminedate").textContent = mine ? "писана на " + dateBg(mine.d) : "";
     document.getElementById("eddel").classList.toggle("hide", isNew);
     document.getElementById("edsheet").classList.remove("hide");
   }
@@ -764,11 +868,15 @@
       var old = edits[n];
       if (old && (old.added || old.home)) { rec.added = true; rec.home = old.home || [edCtx.day, edCtx.pi]; }
       else if (!BASEN[n]) { rec.added = true; rec.home = [edCtx.day, edCtx.pi]; }
-      edits[n] = rec;
+      if (rec.added) { edits[n] = rec; }
+      else { setEdit(n, rec); }
       resolve();
     }
+    setNote(n, document.getElementById("edmine").value, Date.now());
     saveItems();
     saveLayout();
+    saveNotes();
+    touch();
     rebuild();
     closeSheets();
   }
@@ -776,9 +884,13 @@
   function deleteEditor() {
     if (!edCtx || !edCtx.n) { return; }
     var n = edCtx.n;
-    if (!window.confirm("Да изтрия ли „" + byN[n].t + "“?")) { return; }
+    var q = "Да изтрия ли „" + byN[n].t + "“?" + (notes[n] ? " Бележката ти към нея също се трие." : "");
+    if (!window.confirm(q)) { return; }
     if (BASEN[n]) { edits[n] = null; } else { delete edits[n]; }
     delete state[n];
+    delete notes[n];
+    saveNotes();
+    touch();
     DAYS.forEach(function (d) {
       layout[d].forEach(function (ns) {
         var i = ns.indexOf(n);
@@ -853,6 +965,30 @@
   function save() { put(KEY, JSON.stringify(state)); }
   function saveLayout() { put(LKEY, JSON.stringify(layout)); }
   function saveItems() { put(IKEY, JSON.stringify(edits)); }
+  function saveNotes() { put(NKEY, JSON.stringify(notes)); }
+  function saveArch() { put(AKEY, JSON.stringify(arch)); }
+
+  // промяна, която още не е в архив
+  function touch() {
+    arch.changed = Date.now();
+    saveArch();
+    archStatus();
+  }
+
+  function archStatus() {
+    var el = document.getElementById("archstat");
+    var cnt = Object.keys(notes).length;
+    var what = cnt === 1 ? "1 бележка" : cnt + " бележки";
+    var pending = arch.changed > arch.at;
+    if (!arch.at) {
+      el.textContent = "Имаш " + what + ". Още не си пращала архив. Пазят се само в този браузър — изчистиш ли го или смениш телефона, се губят.";
+    } else if (pending) {
+      el.textContent = "Имаш " + what + ". Последен архив " + dateBg(arch.at) + ", но след него има промени.";
+    } else {
+      el.textContent = "Имаш " + what + ". Последен архив " + dateBg(arch.at) + ", всичко е вътре.";
+    }
+    el.classList.toggle("warn", pending && (cnt > 0 || !!arch.at));
+  }
 
   // старите отметки бяха по позиция (thu-0-3); превежда ги към номер на задача
   function migrate(old) {
@@ -868,8 +1004,73 @@
     return out;
   }
 
+  // редакция на изходна задача пази само полетата, различни от BASE —
+  // иначе една бележка „замразява“ стария текст, ако BASE после се смени
+  function setEdit(n, rec) {
+    var b = BASEN[n], e = {};
+    if (rec.t !== b.t) { e.t = rec.t; }
+    if (rec.m !== (b.m || 0)) { e.m = rec.m; }
+    if ((rec.note || "") !== (b.note || "")) { e.note = rec.note; }
+    if (!!rec.key !== !!b.key) { e.key = rec.key; }
+    if (!!rec.wait !== !!b.wait) { e.wait = rec.wait; }
+    if (Object.keys(e).length) { edits[n] = e; } else { delete edits[n]; }
+  }
+
+  // празен текст трие бележката; датата се мени само при нов текст
+  function setNote(n, text, now) {
+    var t = String(text || "").trim();
+    if (!t) {
+      if (!notes[n]) { return false; }
+      delete notes[n];
+      return true;
+    }
+    if (notes[n] && notes[n].t === t) { return false; }
+    notes[n] = { t: t, d: now };
+    return true;
+  }
+
+  function archiveData(now) {
+    return { app: ARCHAPP, v: 1, saved: new Date(now).toISOString(),
+             notes: notes, items: edits, layout: layout };
+  }
+
+  // търпи текст около JSON-а — например подпис, когато е поставен от писмо
+  function parseArchive(txt) {
+    var s = String(txt || ""), a = s.indexOf("{"), b = s.lastIndexOf("}");
+    if (a < 0 || b < a) { return null; }
+    var o = null;
+    try { o = JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; }
+    return o && o.app === ARCHAPP ? o : null;
+  }
+
+  // от две версии на една бележка остава по-новата
+  function mergeNotes(from) {
+    var c = 0;
+    Object.keys(from || {}).forEach(function (n) {
+      var x = from[n];
+      if (!x || typeof x.t !== "string" || !x.t.trim()) { return; }
+      var cur = notes[n];
+      if (!cur || (x.d || 0) > (cur.d || 0)) { notes[n] = { t: x.t, d: x.d || 0 }; c++; }
+    });
+    return c;
+  }
+
+  // бележките се сливат; редакциите и наредбата идват от архива
+  function applyArchive(o) {
+    var c = mergeNotes(o.notes);
+    if (o.items && typeof o.items === "object") { edits = o.items; }
+    resolve();
+    if (prune()) { resolve(); }
+    layout = normalize(o.layout || layout);
+    return c;
+  }
+
   function load() {
-    function apply(rawState, rawLayout, rawItems) {
+    function apply(rawState, rawLayout, rawItems, rawNotes, rawArch) {
+      try { if (rawNotes) { notes = JSON.parse(rawNotes) || {}; } }
+      catch (e) { notes = {}; }
+      try { if (rawArch) { arch = JSON.parse(rawArch) || arch; } }
+      catch (e) { /* остава нулев */ }
       try { if (rawItems) { edits = JSON.parse(rawItems) || {}; } }
       catch (e) { edits = {}; }
       resolve();
@@ -886,16 +1087,19 @@
           return Promise.all([
             window.storage.get(KEY, false),
             window.storage.get(LKEY, false),
-            window.storage.get(IKEY, false)
+            window.storage.get(IKEY, false),
+            window.storage.get(NKEY, false),
+            window.storage.get(AKEY, false)
           ]);
         })
         .then(function (r) {
-          apply(r[0] && r[0].value, r[1] && r[1].value, r[2] && r[2].value);
+          apply(r[0] && r[0].value, r[1] && r[1].value, r[2] && r[2].value,
+                r[3] && r[3].value, r[4] && r[4].value);
         })
-        .catch(function () { apply(null, null, null); });
+        .catch(function () { apply(null, null, null, null, null); });
       return;
     }
-    apply(getLocal(KEY), getLocal(LKEY), getLocal(IKEY));
+    apply(getLocal(KEY), getLocal(LKEY), getLocal(IKEY), getLocal(NKEY), getLocal(AKEY));
   }
 
   document.querySelectorAll(".tabs button").forEach(function (t) {
@@ -909,7 +1113,7 @@
     editing = on;
     app.classList.toggle("editing", on);
     document.getElementById("editbtn").textContent =
-      on ? "Готово с подредбата" : "Подредба на задачите";
+      on ? "Готово с разместването" : "Разместване на задачите";
     document.getElementById("editbar").classList.toggle("hide", !on);
     if (!on) { closeSheets(); }
   }
@@ -944,13 +1148,113 @@
   });
 
   document.getElementById("revertbtn").addEventListener("click", function () {
-    if (!window.confirm("Да върна ли наредбата и текстовете както са в repo-то? Твоите промени тук се губят.")) { return; }
+    if (!window.confirm("Да върна ли наредбата и текстовете както са в repo-то? Твоите промени тук се губят. Бележките ти остават.")) { return; }
     edits = {};
     resolve();
     layout = baseLayout();
     saveItems();
     saveLayout();
+    touch();
     rebuild();
+  });
+
+  // ---- архив: изпращане към себе си и внасяне обратно ----
+
+  function markArchived() {
+    arch.at = Date.now();
+    if (arch.changed > arch.at) { arch.changed = arch.at; }
+    saveArch();
+    archStatus();
+  }
+
+  function archiveName() {
+    var d = new Date();
+    function p(x) { return (x < 10 ? "0" : "") + x; }
+    return "vila-arhiv-" + d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + ".txt";
+  }
+
+  function openArchSheet(mode, txt, name) {
+    var send = mode === "send";
+    document.getElementById("artitle").textContent = send ? "Изпрати архив" : "Внеси архив";
+    document.getElementById("arwhat").textContent = send
+      ? "Копирай текста и си го прати по Gmail или Viber. На нов телефон: „Внеси архив“ и го постави."
+      : "Избери файла с архива или постави текста му отдолу. Бележките се сливат — от две версии остава по-новата. Разместването и редакциите идват от архива.";
+    var ta = document.getElementById("artext");
+    ta.value = send ? txt : "";
+    ta.readOnly = send;
+    ta.placeholder = send ? "" : "Постави архива тук";
+    document.getElementById("arsendbtns").classList.toggle("hide", !send);
+    document.getElementById("arloadbtns").classList.toggle("hide", send);
+    if (send) {
+      var a = document.getElementById("arsave");
+      try {
+        a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" }));
+        a.download = name;
+        a.classList.remove("hide");
+      } catch (e) { a.classList.add("hide"); }
+    }
+    closeSheets();
+    document.getElementById("arsheet").classList.remove("hide");
+  }
+
+  document.getElementById("archsend").addEventListener("click", function () {
+    var txt = JSON.stringify(archiveData(Date.now()), null, 1);
+    var name = archiveName(), file = null;
+    try { file = new File([txt], name, { type: "text/plain" }); } catch (e) { file = null; }
+    if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "Архив — вилата" }).then(markArchived, function (err) {
+        if (!err || err.name !== "AbortError") { openArchSheet("send", txt, name); }
+      });
+      return;
+    }
+    openArchSheet("send", txt, name);
+  });
+
+  document.getElementById("arcopy").addEventListener("click", function () {
+    var ta = document.getElementById("artext");
+    ta.select();
+    var done = false;
+    try { done = document.execCommand("copy"); } catch (e) { done = false; }
+    if (!done && navigator.clipboard) { navigator.clipboard.writeText(ta.value).catch(function () {}); }
+    markArchived();
+    var b = this;
+    b.textContent = "Копирано";
+    setTimeout(function () { b.textContent = "Копирай"; }, 1500);
+  });
+  document.getElementById("arsave").addEventListener("click", markArchived);
+
+  document.getElementById("archload").addEventListener("click", function () {
+    openArchSheet("load");
+  });
+
+  function importText(txt) {
+    var o = parseArchive(txt);
+    if (!o) { window.alert("Това не прилича на архив от този чеклист."); return; }
+    var cnt = Object.keys(o.notes || {}).length;
+    if (!window.confirm("Архив от " + dateBg(Date.parse(o.saved)) + " с " + cnt +
+        " бележки. Разместването и редакциите на този телефон се заменят с тези от архива. Продължаваш ли?")) { return; }
+    var c = applyArchive(o);
+    saveItems();
+    saveLayout();
+    saveNotes();
+    touch();
+    rebuild();
+    closeSheets();
+    window.alert("Внесено. Нови или по-нови бележки: " + c + ".");
+  }
+
+  document.getElementById("arpick").addEventListener("click", function () {
+    document.getElementById("arfile").click();
+  });
+  document.getElementById("arfile").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    if (!f) { return; }
+    var input = this, rd = new FileReader();
+    rd.onload = function () { input.value = ""; importText(String(rd.result || "")); };
+    rd.readAsText(f);
+  });
+  document.getElementById("arimport").addEventListener("click", function () {
+    importText(document.getElementById("artext").value);
   });
 
   document.querySelectorAll("[data-close]").forEach(function (b) {

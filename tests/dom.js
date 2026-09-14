@@ -174,6 +174,78 @@
     click(document.getElementById("donebtn"));
     ok(!document.getElementById("app").classList.contains("editing"), "„Готово“ в лентата изключва режима");
 
+
+    // ---------- ✎ и лични бележки, без режим ----------
+    ok(getComputedStyle(document.querySelector("#sat .addbtn")).display !== "none",
+       "„+ Добави задача“ се вижда и без режим");
+    var r6 = rowByN("sat", "6");
+    ok(getComputedStyle(r6.querySelector(".pen")).display !== "none", "✎ се вижда без режим");
+    click(r6.querySelector(".pen"));
+    ok(r6.getAttribute("aria-checked") === "false", "✎ не отмята реда");
+    ok(!document.getElementById("edsheet").classList.contains("hide"), "✎ отваря редактора");
+    ok(document.getElementById("edmine").value === "", "полето за бележка е празно");
+    document.getElementById("edmine").value = "Капачката и мрежата — в синия плик, горен рафт в банята";
+    click(document.getElementById("edsave"));
+    r6 = rowByN("sat", "6");
+    var mine = r6.querySelector(".mine");
+    ok(!!mine && mine.textContent.indexOf("синия плик") !== -1, "бележката се показва под задачата");
+    ok(mine && /\d\d\.\d\d\.\d{4}/.test(mine.textContent), "бележката носи дата: " + (mine && mine.textContent));
+    var itemsRaw = getLocalRaw("zazimyavane-items-2026");
+    var items = itemsRaw ? JSON.parse(itemsRaw) : {};
+    ok(items["6"] === undefined, "бележката направи редакция на задачата: " + JSON.stringify(items["6"]));
+    var notesRaw = getLocalRaw("zazimyavane-notes-2026");
+    ok(!!notesRaw && notesRaw.indexOf("синия плик") !== -1, "бележката е записана отделно");
+    ok(document.getElementById("archstat").classList.contains("warn"), "архивът предупреждава за незапазено");
+
+    // отворена наново, бележката е там
+    click(r6.querySelector(".pen"));
+    ok(document.getElementById("edmine").value.indexOf("синия плик") !== -1, "бележката се зарежда в редактора");
+    ok(document.getElementById("edminedate").textContent.indexOf("писана на") === 0, "датата се показва в редактора");
+    click(document.querySelector("#edsheet [data-close]"));
+
+    // изнесената наредба за repo-то не съдържа лични бележки
+    click(document.getElementById("editbtn"));
+    click(document.getElementById("exportbtn"));
+    ok(document.getElementById("exptext").value.indexOf("синия плик") === -1, "бележката изтече в изнесената наредба");
+    click(document.querySelector("#expsheet [data-close]"));
+    click(document.getElementById("revertbtn"));
+    ok(!!rowByN("sat", "6").querySelector(".mine"), "„Върни всичко изходно“ изтри бележката");
+    click(document.getElementById("donebtn"));
+
+    // архив: без Web Share се отваря листът с текста
+    click(document.getElementById("archsend"));
+    ok(!document.getElementById("arsheet").classList.contains("hide"), "листът за архив се отваря");
+    var archTxt = document.getElementById("artext").value;
+    ok(archTxt.indexOf("синия плик") !== -1, "архивът съдържа бележката");
+    click(document.getElementById("arcopy"));
+    ok(!document.getElementById("archstat").classList.contains("warn"), "след копиране архивът не предупреждава");
+    click(document.querySelector("#arsheet [data-close]"));
+
+    // триене на бележката с празен текст
+    click(rowByN("sat", "6").querySelector(".pen"));
+    document.getElementById("edmine").value = "  ";
+    click(document.getElementById("edsave"));
+    ok(!rowByN("sat", "6").querySelector(".mine"), "празен текст не изтри бележката");
+
+    // внасяне на архива обратно
+    click(document.getElementById("archload"));
+    ok(!document.getElementById("artext").readOnly, "при внасяне текстът се пише");
+    document.getElementById("artext").value = "Fwd:\n" + archTxt + "\n--";
+    window.alert = function () {};
+    click(document.getElementById("arimport"));
+    ok(document.getElementById("arsheet").classList.contains("hide"), "листът се затваря след внасяне");
+    ok(!!rowByN("sat", "6").querySelector(".mine"), "бележката се върна от архива");
+
+    // триене на задача трие и бележката ѝ
+    click(rowByN("sat", "6").querySelector(".pen"));
+    click(document.getElementById("eddel"));
+    ok(!rowByN("sat", "6"), "задача 6 е изтрита");
+    ok((getLocalRaw("zazimyavane-notes-2026") || "").indexOf("синия плик") === -1, "бележката на изтритата задача остана");
+    click(document.getElementById("editbtn"));
+    click(document.getElementById("revertbtn"));
+    click(document.getElementById("donebtn"));
+    ok(document.querySelectorAll(".row").length === 60, "накрая пак 60 реда");
+
     document.title = "РЕЗУЛТАТ|" + out.join("|");
   }, 300);
 })();

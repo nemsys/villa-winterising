@@ -25,6 +25,10 @@
       click(rowByN("sat","31").querySelector('[data-act="up"]'));
       // отметка
       click(document.getElementById("donebtn"));
+      // лична бележка
+      click(rowByN("sat","13").querySelector(".pen"));
+      document.getElementById("edmine").value="Тапата е в плика с гумичките";
+      click(document.getElementById("edsave"));
       click(rowByN("sat","14"));
       localStorage.setItem("ТЕСТ-ФАЗА","2");
       document.title="ПРОХОД1|записано";
@@ -45,6 +49,9 @@
       var last=document.querySelectorAll("#sat .phase")[3].querySelectorAll(".row");
       ok(last[3].dataset.key==="31","31 се вдигна на позиция 4, там е "+last[3].dataset.key);
       ok(last[4].dataset.key==="32в","32в слезе на позиция 5, там е "+last[4].dataset.key);
+      var m13=rowByN("sat","13").querySelector(".mine");
+      ok(!!m13 && m13.textContent.indexOf("плика с гумичките")!==-1,"личната бележка оцеля");
+      ok(document.getElementById("archstat").classList.contains("warn"),"предупреждението за архив оцеля");
       var r14=rowByN("sat","14");
       ok(r14 && r14.getAttribute("aria-checked")==="true","отметката оцеля");
       var wrong=[]; document.querySelectorAll('.row[aria-checked="true"]').forEach(function(x){ wrong.push(x.dataset.key); });

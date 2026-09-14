@@ -110,5 +110,55 @@ BASEN["Ч1"] = savedCh1;
 reset();
 ok(!!byN["Ч1"], "Ч1 не се възстанови след теста");
 
+// ---- редакция пази само разликата от BASE ----
+reset();
+var b6 = byN["6"];
+setEdit("6", { t: b6.t, m: b6.m, note: b6.note, key: false, wait: false });
+ok(edits["6"] === undefined, "редакция без промяна остави запис: " + JSON.stringify(edits["6"]));
+setEdit("6", { t: b6.t, m: 7, note: b6.note, key: false, wait: false });
+ok(JSON.stringify(edits["6"]) === JSON.stringify({ m: 7 }), "записът не е само разликата: " + JSON.stringify(edits["6"]));
+setEdit("6", { t: b6.t, m: b6.m, note: "", key: true, wait: false });
+ok(edits["6"].note === "" && edits["6"].key === true && edits["6"].m === undefined,
+   "изтрито указание или болд не се пазят: " + JSON.stringify(edits["6"]));
+reset();
+
+// ---- лични бележки ----
+notes = {};
+ok(setNote("6", "  мрежата в синия плик  ", 1000) === true, "нова бележка не се отчита като промяна");
+ok(notes["6"].t === "мрежата в синия плик" && notes["6"].d === 1000, "бележката не е подрязана или няма дата");
+ok(setNote("6", "мрежата в синия плик", 2000) === false, "същият текст мени бележката");
+ok(notes["6"].d === 1000, "същият текст смени датата");
+ok(setNote("6", "   ", 3000) === true && !notes["6"], "празен текст не трие бележката");
+ok(setNote("7", "", 3000) === false, "празен текст без бележка се отчита като промяна");
+
+// ---- архив ----
+var ARCHAPP = "vila-zazimyavane";
+ok(parseArchive("здравей") === null, "произволен текст мина за архив");
+ok(parseArchive('{"app":"друго"}') === null, "чужд JSON мина за архив");
+ok(!!parseArchive('Препратено:\n{"app":"vila-zazimyavane","notes":{}}\n--\nИва'), "архив с текст около него не се разпознава");
+
+notes = { "6": { t: "стара", d: 100 }, "13": { t: "тапата е в плика", d: 500 } };
+var c = mergeNotes({ "6": { t: "нова", d: 200 }, "13": { t: "по-стара", d: 50 }, "9": { t: "кранът", d: 10 }, "x": { t: "  ", d: 999 } });
+ok(c === 2, "сливането отчете " + c + " вместо 2");
+ok(notes["6"].t === "нова", "по-новата бележка не спечели");
+ok(notes["13"].t === "тапата е в плика", "по-старата бележка от архива презаписа");
+ok(notes["9"].t === "кранът", "липсващата бележка не дойде");
+ok(!notes["x"], "празна бележка от архива влезе");
+
+reset();
+notes = {};
+var L2 = baseLayout(); L2.thu[0] = L2.thu[0].filter(function(n){ return n !== "Ч1"; }); L2.sat[3].push("Ч1");
+applyArchive({ app: ARCHAPP, notes: { "6": { t: "n", d: 1 } },
+               items: { "нова-z": { t: "Улуците", m: 5, added: true, home: ["fri", 0] }, "НЯМА": { t: "x" } },
+               layout: L2 });
+ok(!!byN["нова-z"], "добавената задача от архива не дойде");
+ok(edits["НЯМА"] === undefined, "осиротяла редакция от архива оцеля");
+ok(layout.sat[3].indexOf("Ч1") !== -1, "разместването от архива не се приложи");
+ok(layout.fri[0].indexOf("нова-z") !== -1, "добавената задача не е в наредбата");
+var an2 = []; DAYS.forEach(function(d){ layout[d].forEach(function(ns){ an2 = an2.concat(ns); }); });
+ok(an2.length === 61, "след архива има " + an2.length + " вместо 61");
+ok(notes["6"].t === "n", "бележката от архива не дойде");
+reset(); notes = {}; layout = baseLayout();
+
 if (errs.length) { console.log("ПАДНАЛИ:"); errs.forEach(function(e){ console.log("  - " + e); }); process.exit(1); }
 console.log("всички " + okCount + " логически проверки минаха");
