@@ -270,7 +270,7 @@
     background: none; border: 1px solid var(--line); border-radius: 10px;
     color: var(--steel); font-size: 14px; font-family: inherit; cursor: pointer;
   }
-  .hide { display: none; }
+  .hide, .sheetbox .del.hide { display: none; }
   @media (prefers-reduced-motion: reduce) { #app * { transition: none !important; } }
 </style>
 
@@ -345,6 +345,15 @@
   </div>
 </div>
 
+<div class="arch">
+  <h2>Облак</h2>
+  <p id="cloudstat"></p>
+  <div class="btns">
+    <button type="button" class="primary hide" id="cloudnow">Синхронизирай</button>
+    <button type="button" class="secondary" id="cloudset">Свържи</button>
+  </div>
+</div>
+
 <button class="reset" id="reset">Изчисти всички отметки</button>
 <button class="editbtn" id="editbtn" type="button">Разместване на задачите</button>
 
@@ -402,6 +411,18 @@
       <button type="button" class="close" id="arimport">Внеси поставения текст</button>
     </div>
     <button type="button" class="close" data-close>Затвори</button>
+  </div>
+</div>
+
+<div class="sheet hide" id="clsheet">
+  <div class="sheetbox">
+    <h3>Облак</h3>
+    <p class="what">Отметките, бележките и разместването се пазят като файл в твое частно хранилище в GitHub и се виждат от всяко свързано устройство. Адресът и ключът стоят само в този браузър — на всяко устройство се въвеждат веднъж.</p>
+    <label class="fld"><span>Хранилище (потребител/име)</span><input type="text" id="clrepo" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="потребител/хранилище"></label>
+    <label class="fld"><span>Ключ (fine-grained token, само за това хранилище, права Contents: Read and write)</span><input type="password" id="cltoken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…"></label>
+    <button type="button" class="save" id="clsave">Свържи</button>
+    <button type="button" class="del hide" id="cloff">Изключи на това устройство</button>
+    <button type="button" class="close" data-close>Отказ</button>
   </div>
 </div>
 
@@ -499,6 +520,8 @@
   var IKEY = "zazimyavane-items-2026";
   var NKEY = "zazimyavane-notes-2026";
   var AKEY = "zazimyavane-archive-2026";
+  var SKEY = "zazimyavane-sync-2026";
+  var CKEY = "zazimyavane-cloud-2026";
   var ARCHAPP = "vila-zazimyavane";
 
   var DAYS = ["thu", "fri", "sat"];
@@ -524,6 +547,11 @@
 
   // кога за последно е изпратен архив и кога е последната промяна след него
   var arch = { at: 0, changed: 0 };
+
+  // времена на промените, за да се слеят две устройства през облака:
+  // st — отметка по номер, gone — изтрита бележка по номер,
+  // ord — наредбата заедно с редакциите, като едно цяло
+  var meta = { st: {}, gone: {}, ord: 0 };
 
   function merged(b, e) {
     var o = { n: b.n, t: b.t, m: b.m, note: b.note, key: b.key, wait: b.wait };
@@ -872,7 +900,9 @@
       else { setEdit(n, rec); }
       resolve();
     }
+    var had = !!notes[n];
     setNote(n, document.getElementById("edmine").value, Date.now());
+    noteGone(n, had);
     saveItems();
     saveLayout();
     saveNotes();
@@ -887,8 +917,10 @@
     var q = "Да изтрия ли „" + byN[n].t + "“?" + (notes[n] ? " Бележката ти към нея също се трие." : "");
     if (!window.confirm(q)) { return; }
     if (BASEN[n]) { edits[n] = null; } else { delete edits[n]; }
+    var had = !!notes[n];
     delete state[n];
     delete notes[n];
+    noteGone(n, had);
     saveNotes();
     touch();
     DAYS.forEach(function (d) {
@@ -946,8 +978,11 @@
 
   function toggle(n) {
     state[n] = !state[n];
+    meta.st[n] = Date.now();
     refresh();
     save();
+    saveMeta();
+    syncSoon();
   }
 
   function put(k, v) {
@@ -967,12 +1002,27 @@
   function saveItems() { put(IKEY, JSON.stringify(edits)); }
   function saveNotes() { put(NKEY, JSON.stringify(notes)); }
   function saveArch() { put(AKEY, JSON.stringify(arch)); }
+  function saveMeta() { put(SKEY, JSON.stringify(meta)); }
 
-  // промяна, която още не е в архив
+  // последната наредба с редакциите, за която ord е сверен
+  var ordKey = "";
+
+  // промяна, която още не е в архив и не е в облака
   function touch() {
-    arch.changed = Date.now();
+    var now = Date.now(), k = canon([edits, layout]);
+    arch.changed = now;
+    if (k !== ordKey) { meta.ord = now; ordKey = k; }
     saveArch();
+    saveMeta();
     archStatus();
+    syncSoon();
+  }
+
+  // изтрита бележка трябва да остане изтрита и на другите устройства
+  function noteGone(n, had) {
+    if (had && !notes[n]) { meta.gone[n] = Date.now(); }
+    else if (notes[n]) { delete meta.gone[n]; }
+    saveMeta();
   }
 
   function archStatus() {
@@ -980,7 +1030,9 @@
     var cnt = Object.keys(notes).length;
     var what = cnt === 1 ? "1 бележка" : cnt + " бележки";
     var pending = arch.changed > arch.at;
-    if (!arch.at) {
+    if (!arch.at && cloud) {
+      el.textContent = "Имаш " + what + ". Пазят се и в облака; архивът е резервно копие за всеки случай.";
+    } else if (!arch.at) {
       el.textContent = "Имаш " + what + ". Още не си пращала архив. Пазят се само в този браузър — изчистиш ли го или смениш телефона, се губят.";
     } else if (pending) {
       el.textContent = "Имаш " + what + ". Последен архив " + dateBg(arch.at) + ", но след него има промени.";
@@ -1065,12 +1117,67 @@
     return c;
   }
 
+  // ---- облак: сливане на два документа ----
+
+  // JSON с подредени ключове — за сравнение, без значение от реда на запис
+  function canon(v) {
+    if (v === null || v === undefined || typeof v !== "object") { return JSON.stringify(v === undefined ? null : v); }
+    if (Array.isArray(v)) { return "[" + v.map(canon).join(",") + "]"; }
+    return "{" + Object.keys(v).sort().filter(function (k) { return v[k] !== undefined; })
+      .map(function (k) { return JSON.stringify(k) + ":" + canon(v[k]); }).join(",") + "}";
+  }
+
+  function sameDoc(a, b) {
+    function core(d) { return [d.state, d.notes, d.gone, d.items, d.layout, d.ord || 0]; }
+    return canon(core(a)) === canon(core(b));
+  }
+
+  // a е местният, b — от облака. При равни времена печели облакът, за да
+  // не се прехвърля едно и също между две устройства напред-назад.
+  // Отметките и бележките се сливат поотделно; наредбата с редакциите — цялата.
+  function mergeDocs(a, b) {
+    var o = { app: ARCHAPP, v: 1, state: {}, notes: {}, gone: {} };
+    [a, b].forEach(function (d, i) {
+      Object.keys(d.state || {}).forEach(function (n) {
+        var x = d.state[n], cur = o.state[n], t = (x && x.t) || 0;
+        if (!x) { return; }
+        if (!cur || t > cur.t || (i === 1 && t === cur.t)) { o.state[n] = { v: x.v === true, t: t }; }
+      });
+    });
+    var win = {};
+    [a, b].forEach(function (d, i) {
+      Object.keys(d.notes || {}).forEach(function (n) {
+        var x = d.notes[n], cur = win[n];
+        if (!x || typeof x.t !== "string" || !x.t.trim()) { return; }
+        var t = x.d || 0;
+        if (!cur || t > cur.t || (i === 1 && t === cur.t)) { win[n] = { t: t, note: { t: x.t, d: t } }; }
+      });
+      Object.keys(d.gone || {}).forEach(function (n) {
+        var t = d.gone[n] || 0, cur = win[n];
+        if (!cur || t >= cur.t) { win[n] = { t: t, note: null }; }
+      });
+    });
+    Object.keys(win).forEach(function (n) {
+      if (win[n].note) { o.notes[n] = win[n].note; } else { o.gone[n] = win[n].t; }
+    });
+    var src = (b.ord || 0) >= (a.ord || 0) ? b : a;
+    o.items = src.items || {};
+    o.layout = src.layout || null;
+    o.ord = src.ord || 0;
+    return o;
+  }
+
   function load() {
-    function apply(rawState, rawLayout, rawItems, rawNotes, rawArch) {
+    function apply(rawState, rawLayout, rawItems, rawNotes, rawArch, rawMeta) {
       try { if (rawNotes) { notes = JSON.parse(rawNotes) || {}; } }
       catch (e) { notes = {}; }
       try { if (rawArch) { arch = JSON.parse(rawArch) || arch; } }
       catch (e) { /* остава нулев */ }
+      try { if (rawMeta) { meta = JSON.parse(rawMeta) || meta; } }
+      catch (e) { /* остава нулев */ }
+      meta.st = meta.st || {};
+      meta.gone = meta.gone || {};
+      meta.ord = meta.ord || 0;
       try { if (rawItems) { edits = JSON.parse(rawItems) || {}; } }
       catch (e) { edits = {}; }
       resolve();
@@ -1079,7 +1186,15 @@
       catch (e) { state = {}; }
       try { layout = normalize(rawLayout ? JSON.parse(rawLayout) : null); }
       catch (e) { layout = normalize(null); }
+      // данни отпреди облака нямат време; 1 ги прави по-стари от всяка
+      // истинска промяна, но по-нови от празно устройство
+      Object.keys(state).forEach(function (n) { if (!meta.st[n]) { meta.st[n] = 1; } });
+      ordKey = canon([edits, layout]);
+      if (!meta.ord && ordKey !== canon([{}, baseLayout()])) { meta.ord = 1; }
+      try { cloud = JSON.parse(getLocal(CKEY) || "null"); } catch (e) { cloud = null; }
       rebuild();
+      cloudStatus();
+      sync();
     }
     if (window.storage && window.storage.get) {
       Promise.resolve()
@@ -1089,17 +1204,157 @@
             window.storage.get(LKEY, false),
             window.storage.get(IKEY, false),
             window.storage.get(NKEY, false),
-            window.storage.get(AKEY, false)
+            window.storage.get(AKEY, false),
+            window.storage.get(SKEY, false)
           ]);
         })
         .then(function (r) {
           apply(r[0] && r[0].value, r[1] && r[1].value, r[2] && r[2].value,
-                r[3] && r[3].value, r[4] && r[4].value);
+                r[3] && r[3].value, r[4] && r[4].value, r[5] && r[5].value);
         })
-        .catch(function () { apply(null, null, null, null, null); });
+        .catch(function () { apply(null, null, null, null, null, null); });
       return;
     }
-    apply(getLocal(KEY), getLocal(LKEY), getLocal(IKEY), getLocal(NKEY), getLocal(AKEY));
+    apply(getLocal(KEY), getLocal(LKEY), getLocal(IKEY), getLocal(NKEY), getLocal(AKEY), getLocal(SKEY));
+  }
+
+  // ---- облак: файл в частно хранилище в GitHub ----
+  // Адресът и ключът се пазят само в този браузър, никога в страницата.
+
+  var cloud = null;
+  var CFILE = "zazimyavane.json";
+  var syncing = false, syncAgain = false, syncTimer = null;
+  var cloudOk = 0, cloudErr = "";
+
+  function toB64(s) {
+    var b = new TextEncoder().encode(s), r = "";
+    for (var i = 0; i < b.length; i++) { r += String.fromCharCode(b[i]); }
+    return btoa(r);
+  }
+
+  function fromB64(s) {
+    var r = atob(String(s).replace(/\s/g, "")), b = new Uint8Array(r.length);
+    for (var i = 0; i < r.length; i++) { b[i] = r.charCodeAt(i); }
+    return new TextDecoder().decode(b);
+  }
+
+  function api(method, body) {
+    // GitHub кешира отговора 60 секунди; уникален адрес го заобикаля, без
+    // хедъри за кеша, които той не пуска от браузър
+    return fetch("https://api.github.com/repos/" + cloud.repo + "/contents/" + CFILE +
+                 (method === "GET" ? "?_=" + Date.now() : ""), {
+      method: method,
+      headers: { "Authorization": "Bearer " + cloud.token, "Accept": "application/vnd.github+json" },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
+
+  function cloudDoc() {
+    var st = {};
+    Object.keys(meta.st).concat(Object.keys(state)).forEach(function (n) {
+      st[n] = { v: state[n] === true, t: meta.st[n] || 0 };
+    });
+    return { app: ARCHAPP, v: 1, state: st, notes: notes, gone: meta.gone,
+             items: edits, layout: layout, ord: meta.ord || 0 };
+  }
+
+  function applyDoc(d) {
+    state = {};
+    meta.st = {};
+    Object.keys(d.state).forEach(function (n) {
+      if (d.state[n].v) { state[n] = true; }
+      meta.st[n] = d.state[n].t;
+    });
+    notes = d.notes;
+    meta.gone = d.gone;
+    edits = d.items;
+    meta.ord = d.ord;
+    resolve();
+    if (prune()) { resolve(); }
+    layout = normalize(d.layout);
+    ordKey = canon([edits, layout]);
+    save();
+    saveLayout();
+    saveItems();
+    saveNotes();
+    saveMeta();
+  }
+
+  function syncSoon(ms) {
+    if (!cloud) { return; }
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(sync, ms === undefined ? 1500 : ms);
+  }
+
+  // тегли, слива, прилага тук и качва, ако облакът изостава
+  function sync(tries) {
+    if (!cloud) { return; }
+    if (syncing) { syncAgain = true; return; }
+    // не пренарежда страницата под пръстите ѝ, докато пише
+    if (document.querySelector(".sheet:not(.hide)")) { syncSoon(3000); return; }
+    tries = tries || 0;
+    syncing = true;
+    cloudErr = "";
+    cloudStatus("Синхронизира…");
+    api("GET")
+      .then(function (r) {
+        if (r.status === 404) { return { sha: null, doc: null }; }
+        if (!r.ok) { throw r.status; }
+        return r.json().then(function (j) {
+          var d = null;
+          try { d = JSON.parse(fromB64(j.content)); } catch (e) { d = null; }
+          return { sha: j.sha, doc: d && d.app === ARCHAPP ? d : null };
+        });
+      })
+      .then(function (rem) {
+        if (rem.doc) {
+          var local = cloudDoc(), m = mergeDocs(local, rem.doc);
+          if (!sameDoc(m, local)) { applyDoc(m); rebuild(); }
+        }
+        var mine = cloudDoc();
+        if (rem.doc && sameDoc(mine, rem.doc)) { return; }
+        mine.saved = new Date().toISOString();
+        var body = { message: "синхронизация", content: toB64(JSON.stringify(mine)) };
+        if (rem.sha) { body.sha = rem.sha; }
+        return api("PUT", body).then(function (r) {
+          // друго устройство е качило междувременно — отначало
+          if ((r.status === 409 || r.status === 422) && tries < 3) { throw "again"; }
+          if (!r.ok) { throw r.status; }
+        });
+      })
+      .then(function () {
+        cloudOk = Date.now();
+      }, function (e) {
+        if (e === "again") { syncAgain = true; tries++; return; }
+        cloudErr = e === 401 || e === 403 ? "Ключът не става — изтекъл е или няма права за това хранилище."
+          : e === 404 ? "Хранилището не е намерено или ключът няма достъп до него."
+          : typeof e === "number" ? "GitHub върна грешка " + e + ". Ще опита пак."
+          : "Няма връзка. Промените са запазени тук и ще тръгнат сами.";
+      })
+      .then(function () {
+        syncing = false;
+        cloudStatus();
+        if (syncAgain) { syncAgain = false; sync(tries); }
+      });
+  }
+
+  function cloudStatus(msg) {
+    var el = document.getElementById("cloudstat");
+    document.getElementById("cloudnow").classList.toggle("hide", !cloud);
+    document.getElementById("cloudset").textContent = cloud ? "Настройки" : "Свържи";
+    el.classList.toggle("warn", !!cloudErr);
+    if (msg) { el.textContent = msg; return; }
+    if (!cloud) {
+      el.textContent = "Не е свързано. Отметките, бележките и разместването стоят само на това устройство.";
+    } else if (cloudErr) {
+      el.textContent = cloudErr;
+    } else if (cloudOk) {
+      var d = new Date(cloudOk);
+      el.textContent = "Синхронизирано в " + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes() +
+        ". Каквото промениш, стига и до другите устройства.";
+    } else {
+      el.textContent = "Свързано с " + cloud.repo + ".";
+    }
   }
 
   document.querySelectorAll(".tabs button").forEach(function (t) {
@@ -1265,10 +1520,60 @@
   });
 
   document.getElementById("reset").addEventListener("click", function () {
+    var now = Date.now();
+    Object.keys(byN).concat(Object.keys(state), Object.keys(meta.st)).forEach(function (n) {
+      meta.st[n] = now;
+    });
     state = {};
     refresh();
     save();
+    saveMeta();
+    syncSoon();
   });
+
+  // ---- облак: свързване и кога да тегли ----
+
+  document.getElementById("cloudset").addEventListener("click", function () {
+    document.getElementById("clrepo").value = cloud ? cloud.repo : "";
+    document.getElementById("cltoken").value = cloud ? cloud.token : "";
+    document.getElementById("cloff").classList.toggle("hide", !cloud);
+    closeSheets();
+    document.getElementById("clsheet").classList.remove("hide");
+  });
+
+  document.getElementById("clsave").addEventListener("click", function () {
+    var repo = document.getElementById("clrepo").value.trim()
+      .replace(/^https?:\/\/github\.com\//, "").replace(/\.git$|\/+$/g, "");
+    var token = document.getElementById("cltoken").value.trim();
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { document.getElementById("clrepo").focus(); return; }
+    if (!token) { document.getElementById("cltoken").focus(); return; }
+    cloud = { repo: repo, token: token };
+    try { window.localStorage.setItem(CKEY, JSON.stringify(cloud)); } catch (e) { /* само за сесията */ }
+    cloudOk = 0;
+    closeSheets();
+    archStatus();
+    sync();
+  });
+
+  document.getElementById("cloff").addEventListener("click", function () {
+    if (!window.confirm("Да изключа ли облака на това устройство? Данните тук остават, а в облака — също.")) { return; }
+    cloud = null;
+    cloudErr = "";
+    try { window.localStorage.removeItem(CKEY); } catch (e) { /* няма какво да трие */ }
+    closeSheets();
+    archStatus();
+    cloudStatus();
+  });
+
+  document.getElementById("cloudnow").addEventListener("click", function () { sync(); });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") { syncSoon(0); }
+  });
+  window.addEventListener("online", function () { syncSoon(0); });
+  setInterval(function () {
+    if (document.visibilityState === "visible" && !syncing) { syncSoon(0); }
+  }, 60000);
 
   load();
 })();

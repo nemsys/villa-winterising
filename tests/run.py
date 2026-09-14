@@ -5,6 +5,7 @@
 logic.js   — чистата логика (наредба, редакции, времена), в node
 dom.js     — интерфейсът, в headless Chrome
 restart.js — оцеляват ли промените затваряне на браузъра
+cloud.js   — синхронизацията срещу фалшив GitHub, в headless Chrome
 
 Харнесът реже index.html, за да не дублира кода: BASE и функциите се
 вземат от самия файл, тестовете виждат точно това, което върви на живо.
@@ -37,14 +38,14 @@ def run_logic(js, tmp):
     return r.returncode == 0, (r.stdout + r.stderr).strip()
 
 
-def run_browser(page_src, script_path, tmp, profile=False, runs=1):
+def run_browser(page_src, script_path, tmp, profile=False, runs=1, budget=6000):
     if not CHROME:
         return None, "няма Chrome — прескочено"
     f = os.path.join(tmp, os.path.basename(script_path) + ".html")
     io.open(f, "w", encoding="utf-8").write(
         page_src.replace("</body>", read(script_path) + "\n</body>", 1))
     cmd = [CHROME, "--headless=new", "--disable-gpu", "--no-sandbox",
-           "--virtual-time-budget=6000", "--dump-dom", "file://" + f]
+           "--virtual-time-budget=%d" % budget, "--dump-dom", "file://" + f]
     if profile:
         prof = os.path.join(tmp, "prof")
         cmd[4:4] = ["--user-data-dir=" + prof, "--allow-file-access-from-files"]
@@ -70,6 +71,8 @@ def main():
             ("интерфейс (Chrome)", lambda: run_browser(src, os.path.join(T, "dom.js"), tmp)),
             ("рестарт на браузъра", lambda: run_browser(src, os.path.join(T, "restart.js"), tmp,
                                                         profile=True, runs=2)),
+            ("облак (Chrome)", lambda: run_browser(src, os.path.join(T, "cloud.js"), tmp,
+                                                   budget=30000)),
         ):
             ok, msg = fn()
             mark = "прескочено" if ok is None else ("ОК" if ok else "ПАДНА")
